@@ -88,3 +88,5 @@ TODAVÍA EN DESARROLLO
 -Lanza ollama serce por tu cuenta si no puede que no vea la lista de ias descargables
 
 -No se si la implementación de las ias en la nube funcionan (soy pobre no las pago)
+
+-Hay problemas con la implementación de el modelo VR
