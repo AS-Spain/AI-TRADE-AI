@@ -1,4 +1,4 @@
-# 🤖 AI-TRADE-AI
+# 🤖 Intento de IA+ mas modelo VR (Local)
 
 Una asistente de IA conversacional con voz sintetizada localmente, usando Ollama + Piper + Whisper. Interactúa con personajes animados con emociones y memoria.
 
