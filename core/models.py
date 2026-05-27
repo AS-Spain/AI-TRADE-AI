@@ -23,3 +23,4 @@ class Character(BaseModel):
     animations: Dict[str, str]  # Path to json files
     memory: MemoryConfig
     base_path: str
+    vrm: Optional[str] = None  # Path to .vrm file (optional)

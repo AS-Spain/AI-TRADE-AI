@@ -5,6 +5,8 @@ from .models import Character
 class Engine:
     def __init__(self, character_name: str):
         self.character: Character = load_character(character_name)
+        if getattr(self.character, 'vrm', None):
+            print(f"[VRM] Cargando modelo VRM predeterminado: {self.character.vrm}")
         self.llm = LLMEngine(self.character.personality)
         self.current_emotion = "idle"
 
@@ -27,7 +29,8 @@ class Engine:
             "character": self.character.name,
             "text": text,
             "emotion": emotion,
-            "animation_path": animation_file
+            "animation_path": animation_file,
+            "vrm": getattr(self.character, 'vrm', None)
         }
 
     def _play_voice(self, text: str):
