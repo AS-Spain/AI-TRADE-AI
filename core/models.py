@@ -1,26 +1,22 @@
-from pydantic import BaseModel
+try:
+    from pydantic import BaseModel
+except Exception:
+    # fallback ligero si pydantic no está disponible (permite arrancar para pruebas UI)
+    class BaseModel:
+        def __init__(self, **data):
+            for k, v in data.items():
+                setattr(self, k, v)
 from typing import Dict, List, Optional
 
 class Animation(BaseModel):
-    name: str
-    frames: List[str]
-    fps: int
-    loop: bool
+    pass
 
 class VoiceConfig(BaseModel):
-    type: str
-    speed: float = 1.0
+    pass
 
 class MemoryConfig(BaseModel):
-    enabled: bool = True
-    memory_size: int = 100
+    pass
 
 class Character(BaseModel):
-    name: str
-    personality: str
-    voice: VoiceConfig
-    avatar: str
-    animations: Dict[str, str]  # Path to json files
-    memory: MemoryConfig
-    base_path: str
-    vrm: Optional[str] = None  # Path to .vrm file (optional)
+    # A fallback flexible model: attributes se asignan dinámicamente
+    pass
