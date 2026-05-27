@@ -8,7 +8,7 @@ NC='\033[0m'
 echo -e "${CYAN}--- Character Engine Linux Installer ---${NC}"
 
 # 1. Dependencias
-sudo apt update && sudo apt install -y python3-venv ffmpeg curl libasound2-dev
+sudo apt update && sudo apt install -y python3-venv ffmpeg curl libasound2-dev build-essential python3-dev libyaml-dev libsndfile1
 
 # 2. Entorno Python
 if [ ! -d "venv" ]; then
