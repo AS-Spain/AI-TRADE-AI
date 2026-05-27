@@ -1,7 +1,17 @@
 from flask import Flask, request, jsonify, render_template_string, send_from_directory
 from core.config_manager import load_config, save_config, register_clear_saved_config_on_exit
 from core.brain import Brain
-from core.audio_engine import AudioEngine
+try:
+    from core.audio_engine import AudioEngine
+except Exception as _err:
+    # Si faltan dependencias pesadas (faster_whisper, piper), creamos un stub
+    class AudioEngine:
+        def __init__(self, *args, **kwargs):
+            print('⚠️  AudioEngine no disponible — funciones STT/TTS deshabilitadas:', _err)
+        def transcribe(self, *a, **k):
+            raise RuntimeError('AudioEngine no disponible')
+        def speak(self, *a, **k):
+            print('⚠️  speak() llamado pero AudioEngine no está disponible')
 from core.loader import load_character, list_characters
 import os
 import tempfile
@@ -84,6 +94,12 @@ def upload_vrm():
     safe_name = file.filename.replace(' ', '_')
     save_path = os.path.join('uploads', safe_name)
     file.save(save_path)
+    # Log para depuración: confirmar guardado y tamaño
+    try:
+        size = os.path.getsize(save_path)
+        app.logger.info(f"VRM guardado en {save_path} ({size} bytes)")
+    except Exception:
+        app.logger.info(f"VRM guardado en {save_path}")
 
     config = load_config()
     config['active_vrm'] = f"/uploads/{safe_name}"
