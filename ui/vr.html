@@ -41,6 +41,17 @@
             <input id="user-input" type="text" placeholder="Dile algo..." autocomplete="off">
             <button id="send-button" onclick="sendChat()">ENVIAR</button>
         </div>
+        <div id="emotion-controls" style="margin-top:12px; display:flex; gap:8px; flex-wrap:wrap;">
+            <button onclick="applyPresetEmotion('happy')" style="background:#5cff6a; border:none; padding:6px 8px; border-radius:8px; cursor:pointer">😊 Happy</button>
+            <button onclick="applyPresetEmotion('sad')" style="background:#6a99ff; border:none; padding:6px 8px; border-radius:8px; cursor:pointer">😢 Sad</button>
+            <button onclick="applyPresetEmotion('angry')" style="background:#ff7a5f; border:none; padding:6px 8px; border-radius:8px; cursor:pointer">😡 Angry</button>
+            <button onclick="applyPresetEmotion('surprised')" style="background:#ffc84f; border:none; padding:6px 8px; border-radius:8px; cursor:pointer">😮 Surprise</button>
+            <button onclick="applyPresetEmotion('neutral')" style="background:#aaaaaa; border:none; padding:6px 8px; border-radius:8px; cursor:pointer">😐 Neutral</button>
+            <div style="display:flex; align-items:center; gap:8px; margin-left:auto;">
+                <label for="blend-intensity" style="font-size:0.85rem; margin:0 6px 0 0">Intensity</label>
+                <input id="blend-intensity" type="range" min="0" max="1" step="0.01" value="1" style="width:120px">
+            </div>
+        </div>
         <p style="margin-top:12px; font-size:0.9rem;">Presiona el botón <strong>Enter VR</strong> en la parte inferior de la escena para entrar en modo VR compatible con WebXR.</p>
         <p><a href="/">Volver a la interfaz normal</a></p>
     </div>
@@ -204,6 +215,92 @@
             ring.setAttribute('material', 'color', info.ring);
             pulse.setAttribute('material', 'color', info.ring);
             pulse.setAttribute('animation', `property: scale; from: 1 1 1; to: 1.15 1.15 1.15; dur: 700; dir: alternate; loop: true`);
+
+            // Aplicar blendshapes/animation usando three-vrm si está presente
+            const intensity = parseFloat(document.getElementById('blend-intensity')?.value || '1');
+            applyBlendForEmotion(normalized, intensity);
+        }
+
+        function applyPresetEmotion(name) {
+            const intensity = parseFloat(document.getElementById('blend-intensity')?.value || '1');
+            setEmotion(name);
+            applyBlendForEmotion(name, intensity);
+        }
+
+        function applyBlendForEmotion(name, intensity) {
+            // Mapear emociones a posibles nombres de blendShapeGroups
+            const map = {
+                happy: ['Joy', 'Happy', 'smile', 'joy'],
+                sad: ['Sad', 'Sorrow', 'sadness'],
+                angry: ['Angry', 'Anger', 'angry'],
+                surprised: ['Surprised', 'Surprise', 'surprised'],
+                neutral: ['Neutral', 'neutral', 'relaxed']
+            };
+
+            const candidates = map[name] || [name];
+            // Intenta aplicar el primer blendshapeGroup disponible
+            for (const c of candidates) {
+                if (applyBlendShapeGroup(c, intensity)) return true;
+            }
+            return false;
+        }
+
+        function applyBlendShapeGroup(groupName, value) {
+            const vrm = window.currentVrm;
+            if (!vrm) return false;
+
+            const proxy = vrm.blendShapeProxy || (vrm && vrm.scene && vrm.scene.blendShapeProxy) || null;
+            // Si existe la API oficial
+            if (proxy && proxy.blendShapeGroups) {
+                const group = proxy.blendShapeGroups.find(g => (g.name && g.name.toLowerCase() === groupName.toLowerCase()) || (g.name && g.name.toLowerCase().includes(groupName.toLowerCase())));
+                if (group) {
+                    try {
+                        if (typeof proxy.setValue === 'function') {
+                            // algunos builds aceptan name o index
+                            try { proxy.setValue(group.name, value); } catch(e) { proxy.setValue(group.index || group, value); }
+                            return true;
+                        }
+                    } catch (e) { console.warn('proxy.setValue error', e); }
+
+                    // Fallback: aplicar binds manualmente si existen
+                    if (group.binds && Array.isArray(group.binds)) {
+                        group.binds.forEach(bind => {
+                            try {
+                                const node = bind.node || bind.nodeRef || null;
+                                const mName = bind.morphTargetName || bind.blendShapeName || bind.indexName || bind.index;
+                                if (node && node.morphTargetDictionary && node.morphTargetInfluences) {
+                                    const idx = node.morphTargetDictionary[mName];
+                                    if (typeof idx === 'number') node.morphTargetInfluences[idx] = value;
+                                } else {
+                                    // intentar buscar por nombre dentro de la escena
+                                    vrm.scene.traverse(n => {
+                                        if (n.isMesh && n.morphTargetDictionary && n.morphTargetInfluences) {
+                                            const idx = n.morphTargetDictionary[mName];
+                                            if (typeof idx === 'number') n.morphTargetInfluences[idx] = value;
+                                        }
+                                    });
+                                }
+                            } catch (err) { console.warn('bind apply error', err); }
+                        });
+                        return true;
+                    }
+                }
+            }
+
+            // Último recurso: buscar morph targets por nombre en todos los meshes
+            let applied = false;
+            vrm.scene.traverse(n => {
+                if (n.isMesh && n.morphTargetDictionary && n.morphTargetInfluences) {
+                    for (const key in n.morphTargetDictionary) {
+                        if (key.toLowerCase().includes(groupName.toLowerCase())) {
+                            const idx = n.morphTargetDictionary[key];
+                            n.morphTargetInfluences[idx] = value;
+                            applied = true;
+                        }
+                    }
+                }
+            });
+            return applied;
         }
 
         function setSpeaking(isSpeaking) {
