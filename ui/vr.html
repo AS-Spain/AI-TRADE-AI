@@ -5,6 +5,10 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>VR Character</title>
     <script src="https://aframe.io/releases/1.4.0/aframe.min.js"></script>
+    <!-- GLTFLoader (usa el THREE que A-Frame ya expone) -->
+    <script src="https://cdn.jsdelivr.net/npm/three@0.150.1/examples/js/loaders/GLTFLoader.js"></script>
+    <!-- VRM loader de Pixiv -->
+    <script src="https://cdn.jsdelivr.net/npm/@pixiv/three-vrm/dist/three-vrm.js"></script>
     <style>
         body { margin: 0; overflow: hidden; font-family: Arial, sans-serif; background: #05080f; color: white; }
         #hud { position: absolute; top: 12px; left: 12px; z-index: 10; width: 300px; padding: 14px; background: rgba(0,0,0,0.75); border: 1px solid #00ffcc; border-radius: 12px; }
@@ -103,9 +107,93 @@
 
         function setVrmModel(url) {
             if (!url) return;
-            avatarModel.setAttribute('gltf-model', url);
-            avatarModel.setAttribute('visible', 'true');
-            document.getElementById('avatar-plane').setAttribute('visible', 'false');
+            // si ya hay un VRM cargado, elimínalo
+            try {
+                if (window.currentVrm && window.currentVrm.scene) {
+                    avatarModel.object3D.remove(window.currentVrm.scene);
+                    window.currentVrm = null;
+                }
+            } catch (e) { console.warn('No previous VRM to remove', e); }
+
+            // Intentamos cargar como VRM usando Three + three-vrm
+            loadVrmWithThree(url).catch(err => {
+                console.error('Fallo al cargar con three-vrm, fallback a gltf-model', err);
+                avatarModel.setAttribute('gltf-model', url);
+                avatarModel.setAttribute('visible', 'true');
+                document.getElementById('avatar-plane').setAttribute('visible', 'false');
+            });
+        }
+
+        async function loadVrmWithThree(url) {
+            return new Promise((resolve, reject) => {
+                const wrap = document.getElementById('loading-wrap');
+                const fill = document.getElementById('loading-fill');
+                const text = document.getElementById('loading-text');
+                wrap.style.display = 'block';
+                text.innerText = 'Descargando VRM...';
+
+                // Usa el THREE que A-Frame inyecta
+                const THREE = window.THREE || AFRAME.THREE;
+                if (!THREE) return reject(new Error('THREE no está disponible'));                
+
+                // GLTFLoader debería haberse registrado en THREE por el script incluido
+                if (typeof THREE.GLTFLoader === 'undefined') {
+                    return reject(new Error('GLTFLoader no disponible en THREE'));
+                }
+
+                const loader = new THREE.GLTFLoader();
+                loader.setCrossOrigin && loader.setCrossOrigin('anonymous');
+
+                loader.load(url,
+                    async function(gltf) {
+                        try {
+                            // Si la librería three-vrm está presente, usarla
+                            let vrm = null;
+                            if (THREE.VRM && typeof THREE.VRM.from === 'function') {
+                                vrm = await THREE.VRM.from(gltf);
+                            } else if (window.VRM && typeof window.VRM.from === 'function') {
+                                vrm = await window.VRM.from(gltf);
+                            }
+
+                            if (vrm && vrm.scene) {
+                                // ajusta transformaciones básicas
+                                vrm.scene.position.set(0, 0, 0);
+                                vrm.scene.rotation.set(0, Math.PI, 0);
+                                vrm.scene.scale.set(1, 1, 1);
+                                window.currentVrm = vrm;
+                                avatarModel.object3D.add(vrm.scene);
+                                avatarModel.setAttribute('visible', 'true');
+                                document.getElementById('avatar-plane').setAttribute('visible', 'false');
+                                wrap.style.display = 'none';
+                                resolve(vrm);
+                            } else {
+                                // Fallback: añadir el gltf.scene si no hay VRM helper
+                                gltf.scene.position.set(0, 0, 0);
+                                gltf.scene.rotation.set(0, Math.PI, 0);
+                                avatarModel.object3D.add(gltf.scene);
+                                avatarModel.setAttribute('visible', 'true');
+                                document.getElementById('avatar-plane').setAttribute('visible', 'false');
+                                wrap.style.display = 'none';
+                                resolve(gltf.scene);
+                            }
+                        } catch (err) {
+                            wrap.style.display = 'none';
+                            reject(err);
+                        }
+                    },
+                    function(xhr) {
+                        if (xhr && xhr.lengthComputable) {
+                            const pct = Math.floor((xhr.loaded / xhr.total) * 100);
+                            fill.style.width = pct + '%';
+                            text.innerText = 'Descargando VRM... ' + pct + '%';
+                        }
+                    },
+                    function(err) {
+                        wrap.style.display = 'none';
+                        reject(err);
+                    }
+                );
+            });
         }
 
         function setEmotion(emotion) {
