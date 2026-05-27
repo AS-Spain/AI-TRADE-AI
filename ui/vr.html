@@ -25,7 +25,14 @@
         <p id="char-personality">Cargando personalidad...</p>
         <p id="char-status">Estado: idle</p>
         <div id="response-text">Escribe algo en el campo y pulsa ENVIAR para ver la reacción del personaje.</div>
-        <div id="drop-zone">Arrastra tu archivo <strong>.vrm</strong> aquí para configurar el personaje</div>
+        <div id="drop-zone">Arrastra tu archivo <strong>.vrm</strong> aquí para configurar el personaje (o haz click)</div>
+        <input type="file" id="vrm-file-input" accept=".vrm" style="display:none">
+        <div id="loading-wrap" style="margin-top:10px; display:none">
+            <div id="loading-text" style="font-size:0.9rem; margin-bottom:6px">Cargando modelo...</div>
+            <div id="loading-bar" style="width:100%; height:10px; background:#222; border-radius:6px; overflow:hidden; border:1px solid #333">
+                <div id="loading-fill" style="width:0%; height:100%; background:linear-gradient(90deg,#00ffcc,#5affd6);"></div>
+            </div>
+        </div>
         <div id="controls">
             <input id="user-input" type="text" placeholder="Dile algo..." autocomplete="off">
             <button id="send-button" onclick="sendChat()">ENVIAR</button>
@@ -161,19 +168,51 @@
         }
 
         async function uploadVrmFile(file) {
-            const form = new FormData();
-            form.append('vrm', file);
-            const result = await fetch('/api/upload-vrm', {
-                method: 'POST',
-                body: form
+            // muestra barra de carga
+            const wrap = document.getElementById('loading-wrap');
+            const fill = document.getElementById('loading-fill');
+            const text = document.getElementById('loading-text');
+            wrap.style.display = 'block';
+            fill.style.width = '0%';
+            text.innerText = 'Subiendo archivo...';
+
+            return new Promise((resolve) => {
+                const xhr = new XMLHttpRequest();
+                const form = new FormData();
+                form.append('vrm', file);
+
+                xhr.upload.onprogress = function(e) {
+                    if (e.lengthComputable) {
+                        const pct = Math.floor((e.loaded / e.total) * 100);
+                        fill.style.width = pct + '%';
+                        text.innerText = `Subiendo archivo... ${pct}%`;
+                    }
+                };
+
+                xhr.onreadystatechange = function() {
+                    if (xhr.readyState === 4) {
+                        try {
+                            const data = JSON.parse(xhr.responseText || '{}');
+                            if (xhr.status >= 200 && xhr.status < 300 && data.status === 'ok') {
+                                dropZone.innerText = `VRM cargado: ${data.filename}`;
+                                setVrmModel(data.vrm_url);
+                                text.innerText = 'Cargando modelo en la escena...';
+                                // Espera a que el modelo se cargue (evento model-loaded)
+                            } else {
+                                dropZone.innerText = `Error: ${data.message || 'No se pudo cargar'}`;
+                                wrap.style.display = 'none';
+                            }
+                        } catch (err) {
+                            dropZone.innerText = 'Error en la respuesta del servidor.';
+                            wrap.style.display = 'none';
+                        }
+                        resolve();
+                    }
+                };
+
+                xhr.open('POST', '/api/upload-vrm');
+                xhr.send(form);
             });
-            const data = await result.json();
-            if (data.status === 'ok') {
-                dropZone.innerText = `VRM cargado: ${data.filename}`;
-                setVrmModel(data.vrm_url);
-            } else {
-                dropZone.innerText = `Error: ${data.message || 'No se pudo cargar'}`;
-            }
         }
 
         function setDropZoneState(active) {
@@ -202,12 +241,39 @@
             }
         });
 
+        // Soporta click para seleccionar archivo y mejor manejo a nivel ventana
+        dropZone.addEventListener('click', () => document.getElementById('vrm-file-input').click());
+        window.addEventListener('dragover', (e) => e.preventDefault());
+        window.addEventListener('drop', (e) => e.preventDefault());
+
+        document.getElementById('vrm-file-input').addEventListener('change', function(e) {
+            const f = e.target.files[0];
+            if (f && f.name.toLowerCase().endsWith('.vrm')) uploadVrmFile(f);
+        });
+
         userInput.addEventListener('keydown', function(event) {
             if (event.key === 'Enter') sendChat();
         });
 
         loadCharacter();
         setEmotion('idle');
+
+        // Feedback de carga de modelos A-Frame
+        avatarModel.addEventListener('model-loaded', function() {
+            const wrap = document.getElementById('loading-wrap');
+            const fill = document.getElementById('loading-fill');
+            const text = document.getElementById('loading-text');
+            fill.style.width = '100%';
+            text.innerText = 'Modelo cargado';
+            setTimeout(() => { wrap.style.display = 'none'; text.innerText = 'Cargando modelo...'; fill.style.width = '0%'; }, 900);
+        });
+
+        avatarModel.addEventListener('model-error', function(e) {
+            const wrap = document.getElementById('loading-wrap');
+            wrap.style.display = 'none';
+            dropZone.innerText = 'Error al cargar el modelo en la escena. Comprueba la consola del navegador.';
+            console.error('Model error', e);
+        });
     </script>
 </body>
 </html>
