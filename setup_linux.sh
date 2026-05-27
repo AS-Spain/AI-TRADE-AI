@@ -15,7 +15,12 @@ if [ ! -d "venv" ]; then
     python3 -m venv venv
 fi
 source venv/bin/activate
-pip install requests pyyaml pydantic questionary flask flask-cors faster-whisper
+python3 -m pip install --upgrade pip
+if [ -f "requirements.txt" ]; then
+    python3 -m pip install -r requirements.txt
+else
+    python3 -m pip install requests pyyaml pydantic questionary flask flask-cors faster-whisper
+fi
 
 # 3. Piper TTS Local
 if [ ! -d "tools/piper" ]; then
