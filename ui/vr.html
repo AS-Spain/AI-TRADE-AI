@@ -7,8 +7,8 @@
     <script src="https://aframe.io/releases/1.4.0/aframe.min.js"></script>
     <!-- GLTFLoader (usa el THREE que A-Frame ya expone) -->
     <script src="https://cdn.jsdelivr.net/npm/three@0.150.1/examples/js/loaders/GLTFLoader.js"></script>
-    <!-- VRM loader de Pixiv -->
-    <script src="https://cdn.jsdelivr.net/npm/@pixiv/three-vrm/dist/three-vrm.js"></script>
+    <!-- VRM loader de Pixiv: versión fijada para compatibilidad -->
+    <script src="https://cdn.jsdelivr.net/npm/@pixiv/three-vrm@0.5.0/dist/three-vrm.js"></script>
     <style>
         body { margin: 0; overflow: hidden; font-family: Arial, sans-serif; background: #05080f; color: white; }
         #hud { position: absolute; top: 12px; left: 12px; z-index: 10; width: 300px; padding: 14px; background: rgba(0,0,0,0.75); border: 1px solid #00ffcc; border-radius: 12px; }
@@ -51,6 +51,17 @@
                 <label for="blend-intensity" style="font-size:0.85rem; margin:0 6px 0 0">Intensity</label>
                 <input id="blend-intensity" type="range" min="0" max="1" step="0.01" value="1" style="width:120px">
             </div>
+        </div>
+        <div id="anim-controls" style="margin-top:10px; display:flex; gap:8px; align-items:center;">
+            <select id="anim-list" style="min-width:160px">
+                <option value="">-- Animations --</option>
+            </select>
+            <button onclick="playSelectedAnim()" style="padding:6px 8px; border-radius:6px">Play</button>
+            <button onclick="stopAnim()" style="padding:6px 8px; border-radius:6px">Stop</button>
+            <label style="margin-left:6px">Speed</label>
+            <input id="anim-speed" type="range" min="0.1" max="2" step="0.05" value="1" style="width:100px">
+            <label style="margin-left:6px">Loop</label>
+            <input id="anim-loop" type="checkbox" checked>
         </div>
         <p style="margin-top:12px; font-size:0.9rem;">Presiona el botón <strong>Enter VR</strong> en la parte inferior de la escena para entrar en modo VR compatible con WebXR.</p>
         <p><a href="/">Volver a la interfaz normal</a></p>
@@ -166,6 +177,43 @@
                                 vrm = await window.VRM.from(gltf);
                             }
 
+                            // función auxiliar para inicializar animaciones si existen
+                            const initAnimations = (root, animations) => {
+                                try {
+                                    if (animations && animations.length) {
+                                        const mixer = new THREE.AnimationMixer(root);
+                                        window.currentMixer = mixer;
+                                        window.currentActions = {};
+                                        const select = document.getElementById('anim-list');
+                                        // limpiar opciones excepto la primera
+                                        select.innerHTML = '<option value="">-- Animations --</option>';
+                                        animations.forEach((clip, idx) => {
+                                            const name = clip.name || `anim_${idx}`;
+                                            const opt = document.createElement('option');
+                                            opt.value = idx;
+                                            opt.text = name;
+                                            select.appendChild(opt);
+                                            const action = mixer.clipAction(clip);
+                                            action.clampWhenFinished = true;
+                                            window.currentActions[name] = action;
+                                        });
+                                        // iniciar loop de actualización
+                                        if (!window._vrmMixerLoop) {
+                                            window._vrmLastTime = performance.now();
+                                            window._vrmMixerLoop = true;
+                                            const tick = (now) => {
+                                                if (!window._vrmMixerLoop) return;
+                                                const dt = (now - (window._vrmLastTime || now)) / 1000;
+                                                window._vrmLastTime = now;
+                                                try { if (window.currentMixer) window.currentMixer.update(dt * (parseFloat(document.getElementById('anim-speed')?.value || '1'))); } catch(e) {}
+                                                requestAnimationFrame(tick);
+                                            };
+                                            requestAnimationFrame(tick);
+                                        }
+                                    }
+                                } catch (err) { console.warn('initAnimations error', err); }
+                            };
+
                             if (vrm && vrm.scene) {
                                 // ajusta transformaciones básicas
                                 vrm.scene.position.set(0, 0, 0);
@@ -175,6 +223,8 @@
                                 avatarModel.object3D.add(vrm.scene);
                                 avatarModel.setAttribute('visible', 'true');
                                 document.getElementById('avatar-plane').setAttribute('visible', 'false');
+                                // inicializar animaciones desde gltf.animations si existen
+                                initAnimations(vrm.scene, gltf.animations);
                                 wrap.style.display = 'none';
                                 resolve(vrm);
                             } else {
@@ -184,6 +234,8 @@
                                 avatarModel.object3D.add(gltf.scene);
                                 avatarModel.setAttribute('visible', 'true');
                                 document.getElementById('avatar-plane').setAttribute('visible', 'false');
+                                // inicializar animaciones desde gltf.animations
+                                initAnimations(gltf.scene, gltf.animations);
                                 wrap.style.display = 'none';
                                 resolve(gltf.scene);
                             }
@@ -458,6 +510,36 @@
             wrap.style.display = 'none';
             dropZone.innerText = 'Error al cargar el modelo en la escena. Comprueba la consola del navegador.';
             console.error('Model error', e);
+        });
+
+        // Controles de animación: reproducir/pausar desde la UI
+        function playSelectedAnim() {
+            const sel = document.getElementById('anim-list');
+            const idx = sel.value;
+            if (!idx) return;
+            const name = sel.options[sel.selectedIndex].text;
+            const actions = window.currentActions || {};
+            const action = actions[name] || Object.values(actions)[idx];
+            if (!action) return;
+            const loop = document.getElementById('anim-loop').checked;
+            action.loop = loop ? THREE.LoopRepeat : THREE.LoopOnce;
+            action.reset();
+            action.play();
+        }
+
+        function stopAnim() {
+            try {
+                if (window.currentMixer) {
+                    for (const k in window.currentActions) {
+                        try { window.currentActions[k].stop(); } catch(e) {}
+                    }
+                }
+            } catch (e) { console.warn('stopAnim error', e); }
+        }
+
+        // Ajustar velocidad en tiempo real
+        document.getElementById('anim-speed').addEventListener('input', function() {
+            // la velocidad se aplica en el bucle que ya multiplica dt
         });
     </script>
 </body>
