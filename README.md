@@ -79,8 +79,12 @@ MIT License - Usa libremente
 
 TODAVÍA EN DESARROLLO
 
-##Errores
+## Errores
+
 -Hay que repetir el primer comando (igual) 
+
 -A veces no detecta el servidor de ollama, dale al N y sigue configurando y vuelve a intentar 
+
 -Lanza ollama serce por tu cuenta si no puede que no vea la lista de ias descargables
+
 -No se si la implementación de las ias en la nube funcionan (soy pobre no las pago)
