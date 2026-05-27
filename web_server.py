@@ -5,9 +5,10 @@ try:
     from core.audio_engine import AudioEngine
 except Exception as _err:
     # Si faltan dependencias pesadas (faster_whisper, piper), creamos un stub
+    _audio_load_error = str(_err)
     class AudioEngine:
         def __init__(self, *args, **kwargs):
-            print('⚠️  AudioEngine no disponible — funciones STT/TTS deshabilitadas:', _err)
+            print('⚠️  AudioEngine no disponible — funciones STT/TTS deshabilitadas:', _audio_load_error)
         def transcribe(self, *a, **k):
             raise RuntimeError('AudioEngine no disponible')
         def speak(self, *a, **k):
