@@ -49,12 +49,17 @@ def vr_character():
             'vrm_url': config.get('active_vrm')
         })
 
+    vrm = config.get('active_vrm')
+    # Normalizar la URL para que sea absoluta desde la raíz del servidor
+    if vrm and not (vrm.startswith('/') or vrm.startswith('http')):
+        vrm = '/' + vrm
+
     return jsonify({
         'name': character.name,
         'personality': character.personality,
         'avatar_url': f"/characters/{character.name}/{character.avatar}",
         'emotions': list(character.animations.keys()),
-        'vrm_url': config.get('active_vrm')
+        'vrm_url': vrm
     })
 
 
