@@ -180,6 +180,7 @@ HTML = """
         <button type="button" class="small-button" onclick="copySetupCommand()">Copiar comando de setup</button>
         <button type="button" class="small-button" onclick="window.location.href='/vr'">Abrir vista VR</button>
         <div class="note">Cambia el modelo o la personalidad y pulsa Guardar para actualizar el chat.</div>
+        <div class="note">💡 Presiona el botón <strong>Enter VR</strong> en la parte inferior para entrar en modo VR compatible con WebXR.</div>
         <div class="note">Si no has configurado el motor, ejecuta <code>python3 wizard.py</code> en la terminal.</div>
     </div>
 
@@ -195,6 +196,9 @@ HTML = """
         <div class="input-area">
             <input type="text" id="user-input" placeholder="Escribe tu mensaje aquí..." onkeypress="if(event.key==='Enter') sendMsg()">
             <button onclick="sendMsg()">ENVIAR</button>
+        </div>
+        <div style="margin-top: 15px; text-align: center;">
+            <button type="button" class="small-button" style="width: 100%;" onclick="window.location.href='/vr'">🥽 ENTER VR</button>
         </div>
     </div>
 
