@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Character UI Preview</title>
+    <style>
+        body { font-family: sans-serif; background: #1a1a1a; color: white; display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100vh; margin: 0; }
+        .character-container { border: 2px solid #333; padding: 20px; border-radius: 10px; background: #2a2a2a; width: 300px; text-align: center; }
+        .avatar { width: 150px; height: 150px; background: #444; margin: 0 auto 10px; border-radius: 50%; display: flex; align-items: center; justify-content: center; border: 3px solid #00ffcc; }
+        .chat-box { margin-top: 20px; padding: 10px; background: #000; border-radius: 5px; min-height: 50px; font-size: 14px; }
+        .emotion-tag { display: inline-block; padding: 2px 8px; border-radius: 10px; background: #ff4444; font-size: 10px; margin-bottom: 5px; }
+        .input-area { margin-top: 10px; width: 100%; }
+        input { width: 80%; padding: 5px; border-radius: 3px; border: none; }
+        button { padding: 5px 10px; cursor: pointer; background: #00ffcc; border: none; font-weight: bold; border-radius: 3px; }
+    </style>
+</head>
+<body>
+    <div class="character-container">
+        <h2 id="char-name">Luna</h2>
+        <div class="avatar" id="avatar-sprite">
+            <span>[ANIMATION]</span>
+        </div>
+        <div id="emotion" class="emotion-tag">IDLE</div>
+        <div class="chat-box" id="response-text">
+            ¡Hola! Sube un personaje para empezar.
+        </div>
+        <div class="input-area">
+            <input type="text" id="user-input" placeholder="Dile algo...">
+            <button onclick="send()">OK</button>
+        </div>
+    </div>
+
+    <script>
+        function send() {
+            const input = document.getElementById('user-input');
+            const responseText = document.getElementById('response-text');
+            const emotion = document.getElementById('emotion');
+            
+            if (input.value.toLowerCase().includes('hola')) {
+                responseText.innerText = "¡Hola! Estoy lista para el plugin.";
+                emotion.innerText = "HAPPY";
+                emotion.style.background = "#00ff88";
+            } else if (input.value.toLowerCase().includes('triste')) {
+                responseText.innerText = "No estés triste, ¡el código funciona!";
+                emotion.innerText = "SAD";
+                emotion.style.background = "#4488ff";
+            } else {
+                responseText.innerText = "Recibido: " + input.value;
+                emotion.innerText = "NEUTRAL";
+                emotion.style.background = "#aaaaaa";
+            }
+            input.value = '';
+        }
+    </script>
+</body>
+</html>
