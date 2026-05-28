@@ -3,373 +3,205 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>VR Character - Three.js + VRM</title>
+    <title>VR Character - Lip Sync - AI-TRADE-AI</title>
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
-        body { 
-            font-family: 'Courier New', monospace; 
-            background: #05080f; 
-            color: white; 
-            overflow: hidden; 
-        }
-        #canvas-container { 
-            width: 100vw; 
-            height: 100vh; 
-            position: relative; 
-        }
-        canvas { 
-            display: block; 
-            width: 100%; 
-            height: 100%;
-        }
-        #loading-bar {
-            position: fixed;
-            top: 0; left: 0;
-            width: 100%; height: 5px;
-            background: rgba(0, 255, 204, 0.1);
-            z-index: 1000;
-        }
-        #loading-progress {
-            height: 100%;
-            width: 0%;
-            background: linear-gradient(90deg, #00ffcc, #88ff8f, #00ffcc);
-            box-shadow: 0 0 20px rgba(0, 255, 204, 0.8);
-            transition: width 0.15s ease;
-        }
-        #loading-overlay {
-            position: fixed;
-            top: 0; left: 0;
-            width: 100%; height: 100%;
-            background: rgba(0, 0, 0, 0.95);
-            z-index: 999;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            transition: opacity 0.5s, visibility 0.5s;
-        }
+        body { font-family: 'Courier New', monospace; background: #05080f; color: white; overflow: hidden; }
+        #canvas-container { width: 100vw; height: 100vh; position: relative; }
+        #loading-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: #000; z-index: 999; display: flex; align-items: center; justify-content: center; transition: opacity 0.5s; }
         #loading-overlay.hidden { opacity: 0; visibility: hidden; }
-        #loading-content { text-align: center; }
-        #loading-content h2 { font-size: 1.5rem; margin-bottom: 20px; color: #00ffcc; }
-        #loading-content p { font-size: 0.9rem; color: #a6f5e0; margin: 10px 0; }
-        .spinner {
-            width: 40px; height: 40px;
-            margin: 20px auto;
-            border: 3px solid rgba(0, 255, 204, 0.2);
-            border-top: 3px solid #00ffcc;
-            border-radius: 50%;
-            animation: spin 1s linear infinite;
-        }
-        @keyframes spin {
-            0% { transform: rotate(0deg); }
-            100% { transform: rotate(360deg); }
-        }
-        #hud { 
-            position: fixed; 
-            top: 12px; left: 12px; 
-            z-index: 100; 
-            width: 330px; 
-            padding: 14px; 
-            background: rgba(0, 0, 0, 0.9); 
-            border: 2px solid #00ffcc; 
-            border-radius: 12px; 
-            max-height: 85vh;
-            overflow-y: auto;
-        }
-        #hud h1 { margin: 0 0 10px; font-size: 1.2rem; color: #00ffcc; }
-        #hud p { margin: 6px 0; font-size: 0.85rem; line-height: 1.4; color: #ccc; }
-        #response-text { 
-            min-height: 40px; margin: 10px 0; 
-            white-space: pre-wrap; 
-            background: rgba(0, 255, 204, 0.05);
-            padding: 10px; border-radius: 6px;
-            border-left: 3px solid #00ffcc;
-            color: #a6f5e0; font-size: 0.8rem;
-        }
-        #user-input { 
-            width: calc(100% - 80px); padding: 10px; 
-            border-radius: 6px; border: 1px solid #00ffcc; 
-            background: #000; color: #00ffcc;
-            font-family: 'Courier New', monospace; font-size: 0.9rem;
-        }
-        #user-input::placeholder { color: #005555; }
-        #send-button { 
-            width: 68px; padding: 10px; margin-left: 8px; 
-            border-radius: 6px; border: none; 
-            background: #00ffcc; color: #000; 
-            font-weight: bold; cursor: pointer;
-            transition: all 0.2s; font-size: 0.8rem;
-        }
-        #send-button:hover { background: #88ff8f; box-shadow: 0 0 10px rgba(0,255,204,0.5); }
-        #send-button:active { transform: scale(0.95); }
-        #controls { display: flex; align-items: center; margin-top: 10px; gap: 8px; }
-        #drop-zone { 
-            margin-top: 12px; padding: 12px; 
-            border: 2px dashed #00ffcc; border-radius: 8px; 
-            text-align: center; color: #a6f5e0; 
-            background: rgba(0, 255, 204, 0.05); 
-            font-size: 0.8rem; transition: all 0.2s; cursor: pointer;
-        }
-        #drop-zone.dragover { background: rgba(0,255,204,0.2); border-color: #88ff8f; transform: scale(1.02); }
-        a { color: #00ffcc; text-decoration: none; font-size: 0.8rem; }
-        .error-msg {
-            color: #ff6b6b; font-size: 0.8rem; margin-top: 10px; padding: 8px;
-            background: rgba(255,100,100,0.1); border-radius: 4px; border-left: 3px solid #ff6b6b;
-        }
+        #hud { position: fixed; top: 12px; left: 12px; z-index: 100; width: 330px; padding: 14px; background: rgba(0, 0, 0, 0.9); border: 2px solid #00ffcc; border-radius: 12px; }
+        #hud h1 { margin: 0; font-size: 1.2rem; color: #00ffcc; }
+        #response-text { min-height: 50px; margin: 10px 0; padding: 10px; background: rgba(0, 255, 204, 0.05); border-left: 3px solid #00ffcc; font-size: 0.85rem; color: #a6f5e0; line-height: 1.4; }
+        .controls { display: flex; gap: 8px; margin-top: 10px; }
+        input { flex-grow: 1; padding: 10px; background: #000; border: 1px solid #00ffcc; color: #00ffcc; border-radius: 6px; outline: none; }
+        button { padding: 10px; background: #00ffcc; border: none; font-weight: bold; cursor: pointer; border-radius: 6px; color: #000; }
+        #vrm-status { font-size: 0.7rem; margin-top: 10px; color: #00ffcc; }
     </style>
 </head>
 <body>
-    <div id="loading-bar"><div id="loading-progress"></div></div>
-    
-    <div id="loading-overlay">
-        <div id="loading-content">
-            <div class="spinner"></div>
-            <h2>Cargando escena VR...</h2>
-            <p id="loading-status">Inicializando Three.js</p>
-        </div>
-    </div>
-    
+    <div id="loading-overlay"><div><h2 style="color:#00ffcc">Iniciando Lip-Sync...</h2></div></div>
     <div id="canvas-container"></div>
     
     <div id="hud">
-        <h1 id="char-name">VR Character</h1>
-        <p id="char-personality">Cargando personalidad...</p>
-        <p id="char-status">Estado: <span id="status-value">idle</span></p>
-        <div id="response-text">Escribe algo y pulsa ENVIAR para hablar con el personaje.</div>
-        <div id="drop-zone">
-            📁 Arrastra tu <strong>.vrm</strong> aquí o haz click
-            <input type="file" id="vrm-file-input" accept=".vrm" style="display:none;">
+        <h1 id="char-name">Luna</h1>
+        <p id="char-personality" style="font-size:0.75rem; color:#888;">IA Interactiva</p>
+        <div id="response-text">Escribe algo para hablar...</div>
+        
+        <div class="controls">
+            <input type="text" id="user-input" placeholder="Di algo..." onkeypress="if(event.key==='Enter') sendChat()">
+            <button onclick="sendChat()">ENVIAR</button>
         </div>
-        <div id="controls">
-            <input type="text" id="user-input" placeholder="Di algo..." autocomplete="off">
-            <button id="send-button">ENVIAR</button>
-        </div>
-        <p style="margin-top:12px;font-size:0.75rem;color:#888;">
-            💡 Modelo VRM: <span id="vrm-status">Cargando...</span>
-        </p>
-        <p><a href="/">← Volver a chat</a></p>
+        <div id="vrm-status">💡 Status: <span id="status-val">Cargando...</span></div>
     </div>
 
-    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/build/three.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/GLTFLoader.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/@pixiv/three-vrm@0.6.7/lib/three-vrm.umd.js"></script>
-
-    <script>
-        let scene, camera, renderer, vrm;
-        const clock = new THREE.Clock();
-
-        // URL base de Codespaces — se detecta automáticamente
-        const CODESPACES_ORIGIN = window.location.origin;
-
-        function fixUrl(url) {
-            if (!url) return url;
-            // Reemplazar localhost/127.0.0.1 por la origin real del navegador
-            return url.replace(/https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?/, CODESPACES_ORIGIN);
+    <script type="importmap">
+    {
+        "imports": {
+            "three": "https://unpkg.com/three@0.154.0/build/three.module.js",
+            "three/examples/jsm/loaders/GLTFLoader": "https://unpkg.com/three@0.154.0/examples/jsm/loaders/GLTFLoader.js",
+            "three/examples/jsm/controls/OrbitControls": "https://unpkg.com/three@0.154.0/examples/jsm/controls/OrbitControls.js",
+            "@pixiv/three-vrm": "https://unpkg.com/@pixiv/three-vrm@2.0.2/lib/three-vrm.module.js"
         }
+    }
+    </script>
 
-        function updateLoadingProgress(p) {
-            document.getElementById('loading-progress').style.width = p + '%';
-        }
-        function updateLoadingStatus(t) {
-            document.getElementById('loading-status').textContent = t;
-        }
-        function hideLoading() {
-            document.getElementById('loading-overlay').classList.add('hidden');
-        }
+    <script type="module">
+        import * as THREE from 'three';
+        import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader';
+        import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls';
+        import { VRMLoaderPlugin } from '@pixiv/three-vrm';
 
-        async function initThreeJS() {
-            updateLoadingStatus('Inicializando Three.js...');
-            const container = document.getElementById('canvas-container');
+        let scene, camera, renderer, currentVrm, clock, controls;
+        let isSpeaking = false; // Estado para controlar el movimiento de la boca
 
+        function init() {
             scene = new THREE.Scene();
             scene.background = new THREE.Color(0x05080f);
+            clock = new THREE.Clock();
 
-            camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
-            camera.position.set(0, 1.2, 1.5);
-            camera.lookAt(0, 1, 0);
+            camera = new THREE.PerspectiveCamera(35, window.innerWidth / window.innerHeight, 0.1, 100);
+            camera.position.set(0, 1.4, 2.5);
 
             renderer = new THREE.WebGLRenderer({ antialias: true });
             renderer.setSize(window.innerWidth, window.innerHeight);
             renderer.setPixelRatio(window.devicePixelRatio);
-            container.appendChild(renderer.domElement);
+            document.getElementById('canvas-container').appendChild(renderer.domElement);
 
-            scene.add(new THREE.AmbientLight(0xffffff, 0.6));
-            const dir = new THREE.DirectionalLight(0x99ccff, 0.8);
-            dir.position.set(-1, 2, 1);
-            scene.add(dir);
+            const light = new THREE.DirectionalLight(0xffffff, 1.5);
+            light.position.set(1, 1, 1).normalize();
+            scene.add(light);
+            scene.add(new THREE.AmbientLight(0x404040, 1.0));
 
-            const floor = new THREE.Mesh(
-                new THREE.PlaneGeometry(20, 20),
-                new THREE.MeshStandardMaterial({ color: 0x1a1a2e })
-            );
-            floor.rotation.x = -Math.PI / 2;
-            floor.position.y = -0.1;
-            scene.add(floor);
+            controls = new OrbitControls(camera, renderer.domElement);
+            controls.target.set(0, 1.2, 0);
+            controls.update();
 
-            updateLoadingProgress(20);
+            animate();
+            loadCharacter();
         }
 
-        async function loadVRM(vrmUrl) {
-            vrmUrl = fixUrl(vrmUrl);
-            console.log('Cargando VRM desde:', vrmUrl);
-            updateLoadingStatus('Cargando modelo: ' + vrmUrl.split('/').pop());
-            updateLoadingProgress(30);
+        async function loadCharacter() {
+            try {
+                const res = await fetch('/api/vr-character');
+                const data = await res.json();
+                document.getElementById('char-name').innerText = data.name;
+                if (data.vrm_url) loadVRM(data.vrm_url);
+            } catch (e) {
+                console.error(e);
+            }
+        }
 
-            const hasVRM = typeof THREE.VRM !== 'undefined';
-            console.log('THREE.VRM disponible:', hasVRM);
-            console.log('Keys VRM en THREE:', Object.keys(THREE).filter(k => k.toLowerCase().includes('vrm')));
-
-            const loader = new THREE.GLTFLoader();
-
-            return new Promise((resolve, reject) => {
-                loader.load(
-                    vrmUrl,
-                    async (gltf) => {
-                        console.log('GLTF cargado OK');
-                        updateLoadingProgress(60);
-
-                        try {
-                            if (hasVRM) {
-                                THREE.VRMUtils.removeUnnecessaryJoints(gltf.scene);
-                                const vrmData = await THREE.VRM.from(gltf);
-                                vrm = vrmData;
-                                vrm.scene.rotation.y = Math.PI;
-                                scene.add(vrm.scene);
-                                document.getElementById('vrm-status').textContent = '✅ VRM: ' + vrmUrl.split('/').pop();
-                                console.log('VRM cargado OK');
-                            } else {
-                                console.warn('THREE.VRM no disponible — fallback GLTF');
-                                const model = gltf.scene;
-                                const box = new THREE.Box3().setFromObject(model);
-                                const size = box.getSize(new THREE.Vector3());
-                                model.scale.multiplyScalar(2 / Math.max(size.x, size.y, size.z));
-                                const center = box.getCenter(new THREE.Vector3());
-                                model.position.set(-center.x, -center.y + 0.5, -center.z);
-                                scene.add(model);
-                                vrm = { scene: model, isGLTF: true };
-                                document.getElementById('vrm-status').textContent = '⚠️ GLTF fallback: ' + vrmUrl.split('/').pop();
-                            }
-
-                            updateLoadingProgress(85);
-                            resolve(vrm);
-                        } catch (err) {
-                            console.error('Error procesando VRM:', err);
-                            document.getElementById('vrm-status').textContent = '❌ Error: ' + err.message;
-                            reject(err);
-                        }
-                    },
-                    (progress) => {
-                        if (progress.total > 0) {
-                            updateLoadingProgress(30 + (progress.loaded / progress.total) * 30);
-                        }
-                    },
-                    (err) => {
-                        console.error('Error cargando GLTF:', err);
-                        document.getElementById('vrm-status').textContent = '❌ Error al cargar';
-                        reject(err);
-                    }
-                );
+        function loadVRM(url) {
+            const loader = new GLTFLoader();
+            loader.register((parser) => new VRMLoaderPlugin(parser));
+            loader.load(url, (gltf) => {
+                const vrm = gltf.userData.vrm;
+                currentVrm = vrm;
+                scene.add(vrm.scene);
+                vrm.scene.rotation.y = Math.PI;
+                document.getElementById('status-val').innerText = "Conectado ✅";
+                document.getElementById('loading-overlay').classList.add('hidden');
             });
+        }
+
+        // --- LÓGICA DE HABLA Y BOCA ---
+        function handleLipSync(time) {
+            if (!currentVrm || !currentVrm.expressionManager) return;
+
+            if (isSpeaking) {
+                // Hacemos que la boca se abra y cierre de forma natural (Sinusoide rápida)
+                const mouthOpenValue = Math.abs(Math.sin(time * 15)) * 0.7; 
+                currentVrm.expressionManager.setValue('aa', mouthOpenValue);
+            } else {
+                // Si no está hablando, cerramos la boca gradualmente
+                const currentVal = currentVrm.expressionManager.getValue('aa');
+                if (currentVal > 0) {
+                    currentVrm.expressionManager.setValue('aa', Math.max(0, currentVal - 0.1));
+                }
+            }
+        }
+
+        function applyForcedPose() {
+            if (!currentVrm) return;
+            const humanoid = currentVrm.humanoid;
+            const leftArm = humanoid.getRawBoneNode('leftUpperArm');
+            const rightArm = humanoid.getRawBoneNode('rightUpperArm');
+            if (leftArm && rightArm) {
+                leftArm.rotation.z = 1.3; 
+                rightArm.rotation.z = -1.3;
+            }
         }
 
         function animate() {
             requestAnimationFrame(animate);
             const delta = clock.getDelta();
-            if (vrm && typeof vrm.update === 'function') vrm.update(delta);
+            const time = performance.now() * 0.001;
+
+            if (currentVrm) {
+                currentVrm.update(delta);
+                applyForcedPose();
+                handleLipSync(time); // Actualizar boca
+
+                // Parpadeo
+                if (Math.random() < 0.008 && !isSpeaking) {
+                    currentVrm.expressionManager.setValue('blink', 1.0);
+                    setTimeout(() => currentVrm.expressionManager.setValue('blink', 0), 150);
+                }
+            }
+
+            if (controls) controls.update();
             renderer.render(scene, camera);
         }
 
-        async function loadCharacter() {
-            updateLoadingStatus('Obteniendo configuración...');
-            try {
-                const response = await fetch('/api/vr-character');
-                if (!response.ok) throw new Error('HTTP ' + response.status);
-                const data = await response.json();
-                console.log('API vr-character:', data);
-
-                document.getElementById('char-name').textContent = data.name || 'VR Character';
-                document.getElementById('char-personality').textContent = data.personality || '';
-
-                if (data.vrm_url) {
-                    await loadVRM(data.vrm_url);
-                } else {
-                    document.getElementById('vrm-status').textContent = '⚠️ Sin modelo configurado';
-                    updateLoadingStatus('Sin modelo VRM');
-                }
-            } catch (err) {
-                console.error('Error loadCharacter:', err);
-                updateLoadingStatus('❌ ' + err.message);
-                document.getElementById('vrm-status').textContent = '❌ ' + err.message;
-            }
-        }
-
-        async function sendChat() {
+        window.sendChat = async () => {
             const input = document.getElementById('user-input');
             const text = input.value.trim();
             if (!text) return;
-            document.getElementById('response-text').textContent = 'Enviando...';
-            input.value = '';
+
+            document.getElementById('response-text').innerText = "...";
+            input.value = "";
+
             try {
-                const res = await fetch('/api/chat', {
+                const r = await fetch('/api/chat', {
                     method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ text })
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({text})
                 });
-                const data = await res.json();
-                document.getElementById('response-text').textContent = data.text || 'Sin respuesta';
-                document.getElementById('status-value').textContent = (data.emotion || 'idle').toUpperCase();
-                if (window.speechSynthesis) {
-                    const u = new SpeechSynthesisUtterance(data.text);
-                    u.lang = 'es-ES';
-                    window.speechSynthesis.speak(u);
-                }
-            } catch (err) {
-                document.getElementById('response-text').innerHTML =
-                    `<span class="error-msg">❌ Error: ${err.message}</span>`;
+                const d = await r.json();
+                document.getElementById('response-text').innerText = d.text;
+                
+                // --- INICIAR VOZ Y LIP-SYNC ---
+                speakResponse(d.text);
+
+            } catch (e) {
+                document.getElementById('response-text').innerText = "Error de conexión.";
             }
-        }
+        };
 
-        document.getElementById('send-button').addEventListener('click', sendChat);
-        document.getElementById('user-input').addEventListener('keydown', e => {
-            if (e.key === 'Enter') sendChat();
-        });
+        function speakResponse(text) {
+            if (!window.speechSynthesis) return;
 
-        const dropZone = document.getElementById('drop-zone');
-        const fileInput = document.getElementById('vrm-file-input');
+            const utterance = new SpeechSynthesisUtterance(text);
+            utterance.lang = 'es-ES'; // Idioma
 
-        dropZone.addEventListener('click', () => fileInput.click());
-        dropZone.addEventListener('dragover', e => { e.preventDefault(); dropZone.classList.add('dragover'); });
-        dropZone.addEventListener('dragleave', () => dropZone.classList.remove('dragover'));
-        dropZone.addEventListener('drop', e => {
-            e.preventDefault();
-            dropZone.classList.remove('dragover');
-            const file = e.dataTransfer.files[0];
-            if (file && file.name.endsWith('.vrm')) handleVRMUpload(file);
-        });
-        fileInput.addEventListener('change', e => {
-            if (e.target.files[0]) handleVRMUpload(e.target.files[0]);
-        });
-
-        async function handleVRMUpload(file) {
-            document.getElementById('loading-overlay').classList.remove('hidden');
-            updateLoadingStatus('Subiendo ' + file.name + '...');
-            try {
-                const fd = new FormData();
-                fd.append('vrm', file);
-                const res = await fetch('/api/upload-vrm', { method: 'POST', body: fd });
-                const data = await res.json();
-                if (data.status === 'ok') {
-                    if (vrm && vrm.scene && vrm.scene.parent) scene.remove(vrm.scene);
-                    vrm = null;
-                    await loadVRM(data.vrm_url);
-                    dropZone.textContent = '✅ ' + file.name;
-                    hideLoading();
-                } else {
-                    throw new Error(data.message || 'Error desconocido');
+            // Cuando empieza a hablar
+            utterance.onstart = () => {
+                isSpeaking = true;
+                if (currentVrm && currentVrm.expressionManager) {
+                    currentVrm.expressionManager.setValue('happy', 0.3); // Cara amable al hablar
                 }
-            } catch (err) {
-                updateLoadingStatus('❌ ' + err.message);
-                setTimeout(hideLoading, 3000);
-            }
+            };
+
+            // Cuando termina de hablar
+            utterance.onend = () => {
+                isSpeaking = false;
+                if (currentVrm && currentVrm.expressionManager) {
+                    currentVrm.expressionManager.setValue('happy', 0);
+                }
+            };
+
+            window.speechSynthesis.speak(utterance);
         }
 
         window.addEventListener('resize', () => {
@@ -378,20 +210,7 @@
             renderer.setSize(window.innerWidth, window.innerHeight);
         });
 
-        (async () => {
-            try {
-                await initThreeJS();
-                updateLoadingProgress(15);
-                await loadCharacter();
-                updateLoadingProgress(95);
-                animate();
-                updateLoadingProgress(100);
-                setTimeout(hideLoading, 500);
-            } catch (err) {
-                updateLoadingStatus('❌ Fatal: ' + err.message);
-                console.error(err);
-            }
-        })();
+        init();
     </script>
 </body>
 </html>

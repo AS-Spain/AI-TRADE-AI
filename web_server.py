@@ -1,22 +1,28 @@
 from flask import Flask, request, jsonify, render_template_string, send_from_directory
 from core.config_manager import load_config, save_config, register_clear_saved_config_on_exit
 from core.brain import Brain
+import os
+import tempfile
+
+# --- MOTORES DE AUDIO ---
 try:
     from core.audio_engine import AudioEngine
 except Exception as _err:
     _audio_load_error = str(_err)
     class AudioEngine:
         def __init__(self, *args, **kwargs):
-            print('⚠️  AudioEngine no disponible:', _audio_load_error)
+            print('⚠️ AudioEngine no disponible:', _audio_load_error)
         def transcribe(self, *a, **k):
-            raise RuntimeError('AudioEngine no disponible')
+            return "STT no disponible"
         def speak(self, *a, **k):
-            print('⚠️  speak() llamado pero AudioEngine no disponible')
+            pass
+
 from core.loader import load_character, list_characters
-import os
-import tempfile
 
 app = Flask(__name__)
+
+# Permitir archivos grandes (VRM)
+app.config['MAX_CONTENT_LENGTH'] = 100 * 1024 * 1024 
 
 @app.after_request
 def add_headers(response):
@@ -28,326 +34,71 @@ def add_headers(response):
 brain_engine = Brain()
 audio_engine = AudioEngine()
 
-
 def get_active_character():
     config = load_config()
     char_name = config.get('active_personality', '')
     if char_name and os.path.isdir(os.path.join('characters', char_name)):
         return load_character(char_name)
     characters = list_characters()
-    if characters:
-        return load_character(characters[0])
-    return None
+    return load_character(characters[0]) if characters else None
 
-
+# --- RUTAS DE ARCHIVOS ---
 @app.route('/ui/<path:filename>')
 def ui_static(filename):
     return send_from_directory('ui', filename)
-
 
 @app.route('/characters/<character>/<path:filename>')
 def character_asset(character, filename):
     return send_from_directory(os.path.join('characters', character), filename)
 
-
-@app.route('/api/vr-character')
-def vr_character():
-    config = load_config()
-    character = get_active_character()
-
-    # Leer vrm del character primero, luego del config global
-    vrm = None
-    if character and hasattr(character, 'vrm') and character.vrm:
-        vrm = character.vrm
-    else:
-        vrm = config.get('active_vrm')
-
-    if vrm and not vrm.startswith('http'):
-        vrm = request.host_url.rstrip('/') + '/' + vrm.lstrip('/')
-
-    if not character:
-        return jsonify({
-            'name': 'Sin personaje',
-            'personality': 'Sin personalidad definida',
-            'avatar_url': '',
-            'emotions': [],
-            'vrm_url': vrm
-        })
-
-    return jsonify({
-        'name': character.name,
-        'personality': character.personality,
-        'avatar_url': request.host_url.rstrip('/') + f"/characters/{character.name}/{character.avatar}",
-        'emotions': list(character.animations.keys()),
-        'vrm_url': vrm
-    })
-
-
 @app.route('/uploads/<path:filename>')
 def uploads(filename):
     return send_from_directory('uploads', filename)
-
-
-@app.route('/api/upload-vrm', methods=['POST'])
-def upload_vrm():
-    if 'vrm' not in request.files:
-        return jsonify({'status': 'error', 'message': 'No se recibió archivo .vrm'}), 400
-
-    file = request.files['vrm']
-    if file.filename == '':
-        return jsonify({'status': 'error', 'message': 'Nombre de archivo inválido'}), 400
-
-    if not file.filename.lower().endswith('.vrm'):
-        return jsonify({'status': 'error', 'message': 'Solo se aceptan archivos .vrm'}), 400
-
-    os.makedirs('uploads', exist_ok=True)
-    safe_name = file.filename.replace(' ', '_')
-    save_path = os.path.join('uploads', safe_name)
-    file.save(save_path)
-
-    try:
-        size = os.path.getsize(save_path)
-        app.logger.info(f"VRM guardado en {save_path} ({size} bytes)")
-    except Exception:
-        app.logger.info(f"VRM guardado en {save_path}")
-
-    config = load_config()
-    config['active_vrm'] = f"/uploads/{safe_name}"
-    save_config(config)
-
-    vrm_url = request.host_url.rstrip('/') + config['active_vrm']
-    return jsonify({'status': 'ok', 'vrm_url': vrm_url, 'filename': safe_name})
-
 
 @app.route('/vr')
 def vr():
     return send_from_directory('ui', 'vr.html')
 
-
-HTML = """
-<!DOCTYPE html>
-<html lang="es">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Character OS - Terminal</title>
-    <style>
-        :root { --primary: #00ffcc; --bg: #0a0a0a; --panel: #111; }
-        body { background: var(--bg); color: var(--primary); font-family: 'Courier New', monospace; margin: 0; display: flex; height: 100vh; }
-        .sidebar { width: 300px; background: var(--panel); border-right: 1px solid #333; padding: 20px; display: flex; flex-direction: column; }
-        .sidebar h2 { font-size: 1.2rem; border-bottom: 1px solid #333; padding-bottom: 10px; }
-        .input-group { margin-bottom: 15px; }
-        label { display: block; font-size: 0.8rem; color: #888; margin-bottom: 5px; }
-        input, select { width: 100%; background: #000; border: 1px solid #333; color: white; padding: 8px; border-radius: 4px; box-sizing: border-box; }
-        .main-chat { flex-grow: 1; display: flex; flex-direction: column; padding: 20px; position: relative; }
-        #chat-window { flex-grow: 1; overflow-y: auto; border: 1px solid #222; padding: 15px; background: #000; border-radius: 5px; margin-bottom: 20px; }
-        .msg { margin-bottom: 15px; line-height: 1.4; }
-        .msg.user { color: #fff; }
-        .msg.bot { color: var(--primary); }
-        .emotion-tag { font-size: 0.7rem; background: #222; padding: 2px 5px; border-radius: 3px; margin-right: 5px; }
-        .input-area { display: grid; grid-template-columns: 1fr auto; gap: 12px; }
-        .input-area input { width: 100%; padding: 14px; font-size: 1rem; border: 1px solid var(--primary); border-radius: 6px; background: #000; color: white; }
-        button { background: var(--primary); color: #000; border: none; padding: 12px 16px; font-weight: bold; cursor: pointer; border-radius: 8px; }
-        button:hover { opacity: 0.92; }
-        .status-box { background: #111; border: 1px solid #222; border-radius: 12px; padding: 16px; display: flex; flex-direction: column; gap: 8px; }
-        .status-box div { font-size: 0.93rem; }
-        .status-box strong { color: #fff; }
-        .status-line { margin-top: 10px; font-size: 0.85rem; color: #8fd7c1; }
-        .note { font-size: 0.84rem; color: #aaa; }
-        .small-button { margin-top: 12px; background: transparent; border: 1px solid #00ffcc; color: #00ffcc; padding: 10px 14px; border-radius: 8px; font-size: 0.95rem; }
-        .small-button:hover { opacity: 0.9; }
-        code { background: #111; padding: 2px 6px; border-radius: 4px; color: #a6f5e0; }
-    </style>
-</head>
-<body>
-    <div class="sidebar">
-        <h2>⚙️ Configuración rápida</h2>
-        <div class="status-box">
-            <div><strong>Proveedor:</strong> {{ c.llm.provider or 'No configurado' }}</div>
-            <div><strong>Modelo:</strong> {{ c.llm.model or 'No configurado' }}</div>
-            <div><strong>Personalidad:</strong> {{ c.active_personality or 'No configurada' }}</div>
-            <div><strong>Audio local:</strong> {{ 'ON' if c.audio.tts_local else 'OFF' }}</div>
-            <div class="status-line">{{ 'Listo para chatear' if c.llm.provider and c.llm.model else 'Aún falta configuración' }}</div>
-        </div>
-        <div class="input-group">
-            <label>Modelo LLM</label>
-            <input type="text" id="cfg-model" value="{{ c.llm.model }}" placeholder="ej: llama3">
-        </div>
-        <div class="input-group">
-            <label>Personalidad</label>
-            <input type="text" id="cfg-personality" value="{{ c.active_personality }}" placeholder="ej: Luna">
-        </div>
-        <button type="button" onclick="saveConfig()">Guardar y aplicar</button>
-        <button type="button" class="small-button" onclick="copySetupCommand()">Copiar comando de setup</button>
-        <button type="button" class="small-button" onclick="window.location.href='/vr'">Abrir vista VR</button>
-        <div class="note">Si no has configurado el motor, ejecuta <code>python3 wizard.py</code> en la terminal.</div>
-    </div>
-
-    <div class="main-chat">
-        <div id="chat-window">
-            <div class="msg bot"><span class="emotion-tag">SYSTEM</span> Bienvenido a Character OS.</div>
-        </div>
-        <div class="audio-controls" style="margin-bottom: 15px; display:flex; align-items:center; gap:10px;">
-            <button type="button" id="record-button" onclick="toggleRecording()">🎤 Grabar</button>
-            <span id="record-status">Listo para grabar</span>
-        </div>
-        <div class="note">Transcripción: <span id="transcript-text">Aquí aparecerá tu voz.</span></div>
-        <div class="input-area">
-            <input type="text" id="user-input" placeholder="Escribe tu mensaje..." onkeypress="if(event.key==='Enter') sendMsg()">
-            <button onclick="sendMsg()">ENVIAR</button>
-        </div>
-        <div style="margin-top: 15px; text-align: center;">
-            <button type="button" class="small-button" style="width: 100%;" onclick="window.location.href='/vr'">🥽 ENTER VR</button>
-        </div>
-    </div>
-
-    <script>
-        let mediaRecorder = null, audioChunks = [], recording = false;
-
-        async function toggleRecording() {
-            if (recording) { mediaRecorder.stop(); return; }
-            if (!navigator.mediaDevices?.getUserMedia) { alert('Navegador no soporta grabación.'); return; }
-            try {
-                const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-                mediaRecorder = new MediaRecorder(stream);
-                audioChunks = [];
-                mediaRecorder.ondataavailable = e => audioChunks.push(e.data);
-                mediaRecorder.onstop = async () => {
-                    await sendAudio(new Blob(audioChunks, { type: 'audio/webm' }));
-                    stream.getTracks().forEach(t => t.stop());
-                };
-                mediaRecorder.start();
-                recording = true;
-                document.getElementById('record-button').innerText = '⏹️ Detener';
-                document.getElementById('record-status').innerText = 'Grabando...';
-            } catch (err) { alert('Micrófono: ' + err.message); }
-        }
-
-        async function sendAudio(blob) {
-            const fd = new FormData();
-            fd.append('audio', blob, 'input.webm');
-            try {
-                const r = await fetch('/api/transcribe', { method: 'POST', body: fd });
-                const d = await r.json();
-                if (d.status === 'ok') {
-                    document.getElementById('transcript-text').innerText = d.transcript || 'Sin voz.';
-                    document.getElementById('user-input').value = d.transcript || '';
-                } else {
-                    document.getElementById('transcript-text').innerText = 'Error: ' + d.message;
-                }
-            } catch (e) {
-                document.getElementById('transcript-text').innerText = 'Error: ' + e.message;
-            } finally {
-                recording = false;
-                document.getElementById('record-button').innerText = '🎤 Grabar';
-                document.getElementById('record-status').innerText = 'Listo.';
-            }
-        }
-
-        async function sendMsg() {
-            const input = document.getElementById('user-input');
-            const chatWin = document.getElementById('chat-window');
-            const text = input.value.trim();
-            if (!text) return;
-            chatWin.innerHTML += `<div class="msg user"><b>Tú:</b> ${escapeHtml(text)}</div>`;
-            input.value = '';
-            chatWin.scrollTop = chatWin.scrollHeight;
-            try {
-                const r = await fetch('/api/chat', {
-                    method: 'POST',
-                    headers: {'Content-Type': 'application/json'},
-                    body: JSON.stringify({text})
-                });
-                const d = await r.json();
-                chatWin.innerHTML += `<div class="msg bot"><span class="emotion-tag">${escapeHtml((d.emotion||'').toUpperCase())}</span><b>${escapeHtml(d.name||'Bot')}:</b> ${escapeHtml(d.text)}</div>`;
-                if (window.speechSynthesis) {
-                    const u = new SpeechSynthesisUtterance(d.text);
-                    u.lang = 'es-ES';
-                    window.speechSynthesis.speak(u);
-                }
-            } catch (e) {
-                chatWin.innerHTML += `<div class="msg bot" style="color:#ff6b6b">Error: ${e.message}</div>`;
-            }
-            chatWin.scrollTop = chatWin.scrollHeight;
-        }
-
-        async function saveConfig() {
-            const model = document.getElementById('cfg-model').value.trim();
-            const personality = document.getElementById('cfg-personality').value.trim();
-            if (!model || !personality) { alert('Completa modelo y personalidad.'); return; }
-            const r = await fetch('/api/config', {
-                method: 'POST',
-                headers: {'Content-Type': 'application/json'},
-                body: JSON.stringify({model, personality})
-            });
-            const d = await r.json();
-            alert(d.status === 'ok' ? 'Guardado.' : 'Error.');
-        }
-
-        function copySetupCommand() {
-            navigator.clipboard.writeText('python3 wizard.py')
-                .then(() => alert('Copiado.'))
-                .catch(() => alert('Usa: python3 wizard.py'));
-        }
-
-        function escapeHtml(text) {
-            return (text||'').replace(/[&<>"]/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[m]));
-        }
-
-        document.getElementById('user-input').focus();
-    </script>
-</body>
-</html>
-"""
-
-@app.route('/')
-def home():
+# --- API VRM ---
+@app.route('/api/vr-character')
+def vr_character():
     config = load_config()
-    return render_template_string(HTML, c=config)
+    character = get_active_character()
+    vrm_url = None
+    if character and hasattr(character, 'vrm') and character.vrm:
+        vrm_filename = os.path.basename(character.vrm)
+        vrm_url = f"/characters/{character.name}/{vrm_filename}"
+    else:
+        vrm_url = config.get('active_vrm')
+    return jsonify({
+        'name': character.name if character else 'Luna',
+        'personality': character.personality if character else '',
+        'vrm_url': vrm_url
+    })
 
-
+# --- APIS DE CHAT Y VOZ ---
 @app.route('/api/chat', methods=['POST'])
 def chat_api():
     config = load_config()
     user_text = request.json.get('text')
-
+    character = get_active_character()
     personality_config = {
-        "name": config['active_personality'],
-        "instructions": f"Eres {config['active_personality']}, una IA que responde de forma concisa."
+        "name": character.name if character else config['active_personality'],
+        "instructions": character.personality if character else "Eres una IA amable."
     }
-
-    response = None
-    if config['llm']['provider'] and config['llm']['model']:
-        brain_engine.config = config
-        brain_engine.llm_settings = config['llm']
-        try:
-            response = brain_engine.process(personality_config, user_text, [])
-        except Exception as e:
-            response = {
-                "text": f"No se pudo conectar: {str(e)}",
-                "emotion": "error",
-                "name": config['active_personality']
-            }
-
-    if response is None:
-        response = {
-            "text": "Motor de IA no configurado. Ejecuta el wizard.",
-            "emotion": "warning",
-            "name": config['active_personality'] or 'Sistema'
-        }
-
+    brain_engine.config = config
+    brain_engine.llm_settings = config.get('llm', {})
+    try:
+        response = brain_engine.process(personality_config, user_text, [])
+    except Exception as e:
+        response = {"text": f"Error: {str(e)}", "emotion": "sad", "name": "System"}
     return jsonify(response)
-
 
 @app.route('/api/transcribe', methods=['POST'])
 def transcribe_audio():
-    if 'audio' not in request.files:
-        return jsonify({'status': 'error', 'message': 'No se envió audio'}), 400
+    if 'audio' not in request.files: return jsonify({'status': 'error'}), 400
     audio_file = request.files['audio']
-    if not audio_file.filename:
-        return jsonify({'status': 'error', 'message': 'Nombre inválido'}), 400
-    suffix = os.path.splitext(audio_file.filename)[1] or '.wav'
-    with tempfile.NamedTemporaryFile(delete=False, suffix=suffix) as tmp:
+    with tempfile.NamedTemporaryFile(delete=False, suffix='.wav') as tmp:
         audio_file.save(tmp.name)
         temp_path = tmp.name
     try:
@@ -356,11 +107,7 @@ def transcribe_audio():
     except Exception as e:
         return jsonify({'status': 'error', 'message': str(e)}), 500
     finally:
-        try:
-            os.remove(temp_path)
-        except OSError:
-            pass
-
+        if os.path.exists(temp_path): os.remove(temp_path)
 
 @app.route('/api/config', methods=['POST'])
 def update_config():
@@ -371,6 +118,97 @@ def update_config():
     save_config(config)
     return jsonify({"status": "ok"})
 
+# --- INTERFAZ HTML (ESTO ES LO QUE VE EL NAVEGADOR) ---
+HTML = """
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <title>AI-TRADE-AI Terminal</title>
+    <style>
+        :root { --primary: #00ffcc; --bg: #0a0a0a; --panel: #111; }
+        body { background: var(--bg); color: var(--primary); font-family: 'Courier New', monospace; margin: 0; display: flex; height: 100vh; overflow: hidden; }
+        .sidebar { width: 300px; background: var(--panel); border-right: 1px solid #333; padding: 20px; display: flex; flex-direction: column; }
+        .main-chat { flex-grow: 1; display: flex; flex-direction: column; padding: 20px; }
+        #chat-window { flex-grow: 1; overflow-y: auto; border: 1px solid #222; padding: 15px; background: #000; border-radius: 5px; margin-bottom: 20px; }
+        .msg { margin-bottom: 15px; line-height: 1.4; }
+        .msg.user { color: #fff; }
+        .msg.bot { color: var(--primary); }
+        .input-area { display: flex; gap: 10px; }
+        input { flex-grow: 1; background: #000; border: 1px solid var(--primary); color: white; padding: 12px; border-radius: 5px; }
+        button { background: var(--primary); color: #000; border: none; padding: 10px 20px; font-weight: bold; cursor: pointer; border-radius: 5px; }
+        .small-button { margin-top: 10px; background: transparent; border: 1px solid var(--primary); color: var(--primary); padding: 8px; cursor: pointer; border-radius: 5px; }
+    </style>
+</head>
+<body>
+    <div class="sidebar">
+        <h2>⚙️ Configuración</h2>
+        <p style="font-size:0.8rem; color:#888;">Modelo: {{ c.llm.model }}</p>
+        <p style="font-size:0.8rem; color:#888;">Personaje: {{ c.active_personality }}</p>
+        <button class="small-button" onclick="window.location.href='/vr'">🥽 ABRIR VISTA VR</button>
+    </div>
+    <div class="main-chat">
+        <div id="chat-window">
+            <div class="msg bot">Terminal cargada. Lista para chatear.</div>
+        </div>
+        <div class="audio-controls" style="margin-bottom:10px;">
+            <button id="record-btn" onclick="toggleRecording()">🎤 Grabar Voz</button>
+        </div>
+        <div class="input-area">
+            <input type="text" id="user-input" placeholder="Escribe tu mensaje..." onkeypress="if(event.key==='Enter') sendMsg()">
+            <button onclick="sendMsg()">ENVIAR</button>
+        </div>
+    </div>
+    <script>
+        let mediaRecorder, audioChunks = [], recording = false;
+
+        async function toggleRecording() {
+            if (recording) { mediaRecorder.stop(); return; }
+            const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+            mediaRecorder = new MediaRecorder(stream);
+            audioChunks = [];
+            mediaRecorder.ondataavailable = e => audioChunks.push(e.data);
+            mediaRecorder.onstop = async () => {
+                const blob = new Blob(audioChunks, { type: 'audio/webm' });
+                const fd = new FormData();
+                fd.append('audio', blob, 'input.webm');
+                const r = await fetch('/api/transcribe', { method: 'POST', body: fd });
+                const d = await r.json();
+                if (d.status === 'ok') document.getElementById('user-input').value = d.transcript;
+                recording = false;
+                document.getElementById('record-btn').innerText = '🎤 Grabar Voz';
+            };
+            mediaRecorder.start();
+            recording = true;
+            document.getElementById('record-btn').innerText = '⏹️ Detener';
+        }
+
+        async function sendMsg() {
+            const input = document.getElementById('user-input');
+            const text = input.value.trim();
+            if(!text) return;
+            const chatWin = document.getElementById('chat-window');
+            chatWin.innerHTML += `<div class="msg user"><b>Tú:</b> ${text}</div>`;
+            input.value = '';
+            const r = await fetch('/api/chat', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({text})
+            });
+            const d = await r.json();
+            chatWin.innerHTML += `<div class="msg bot"><b>${d.name}:</b> ${d.text}</div>`;
+            chatWin.scrollTop = chatWin.scrollHeight;
+        }
+    </script>
+</body>
+</html>
+"""
+
+@app.route('/')
+def home():
+    config = load_config()
+    # ESTO es lo que hace que se vea el HTML y no el código Python
+    return render_template_string(HTML, c=config)
 
 if __name__ == '__main__':
-    app.run(host='0.0.0.0', port=5000)
+    app.run(host='0.0.0.0', port=5000, debug=True)
