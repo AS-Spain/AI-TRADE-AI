@@ -345,35 +345,59 @@
                             console.log('📦 Model scene:', model);
                             
                             try {
-                                // Cargar VRM addon
+                                // Intentar cargar VRM addon
                                 console.log('🔍 Buscando THREE.VRM...');
+                                let vrmData = null;
+                                
                                 if (typeof THREE !== 'undefined' && typeof THREE.VRM !== 'undefined') {
-                                    console.log('✅ THREE.VRM disponible');
-                                    const vrmData = await THREE.VRM.from(gltf);
+                                    console.log('✅ THREE.VRM disponible, procesando...');
+                                    vrmData = await THREE.VRM.from(gltf);
                                     vrm = vrmData;
+                                    vrm.scene.scale.set(1, 1, 1);
+                                    scene.add(vrm.scene);
                                 } else if (typeof VRM !== 'undefined') {
-                                    console.log('✅ VRM global disponible (no THREE.VRM)');
-                                    const vrmData = await VRM.from(gltf);
+                                    console.log('✅ VRM global disponible, procesando...');
+                                    vrmData = await VRM.from(gltf);
                                     vrm = vrmData;
+                                    vrm.scene.scale.set(1, 1, 1);
+                                    scene.add(vrm.scene);
                                 } else {
-                                    throw new Error('THREE.VRM no está disponible. Verifica que la librería three-vrm se cargó correctamente.');
+                                    // Fallback: Mostrar el modelo GLTF como está
+                                    console.warn('⚠️ THREE.VRM no disponible, usando fallback GLTF');
+                                    const model = gltf.scene;
+                                    
+                                    // Centrar y escalar el modelo
+                                    const box = new THREE.Box3().setFromObject(model);
+                                    const size = box.getSize(new THREE.Vector3());
+                                    const maxDim = Math.max(size.x, size.y, size.z);
+                                    const scale = 2 / maxDim;
+                                    
+                                    model.scale.multiplyScalar(scale);
+                                    
+                                    // Centrar verticalmente
+                                    box.setFromObject(model);
+                                    const center = box.getCenter(new THREE.Vector3());
+                                    model.position.x = -center.x;
+                                    model.position.y = -center.y + 0.5;
+                                    model.position.z = -center.z;
+                                    
+                                    scene.add(model);
+                                    vrm = { scene: model, isGLTF: true };
+                                    
+                                    console.log('✅ Modelo GLTF agregado a la escena (fallback)');
                                 }
                                 
-                                console.log('✅ VRM data:', vrm);
-                                vrm.scene.scale.set(1, 1, 1);
-                                scene.add(vrm.scene);
-                                
-                                console.log('✅ VRM agregado a la escena');
+                                console.log('✅ Modelo agregado a la escena');
                                 updateLoadingProgress(80);
-                                updateLoadingStatus('Modelo VRM cargado');
+                                updateLoadingStatus('Modelo cargado');
                                 
                                 document.getElementById('vrm-status').textContent = 
-                                    '✅ ' + vrmUrl.split('/').pop();
+                                    (vrmData ? '✅ VRM: ' : '⚠️ GLTF: ') + vrmUrl.split('/').pop();
                                 
                                 resolve(vrm);
                             } catch (vrmError) {
-                                console.error('❌ Error procesando VRM:', vrmError);
-                                reject(new Error('Error procesando VRM: ' + vrmError.message));
+                                console.error('❌ Error procesando VRM/GLTF:', vrmError);
+                                reject(new Error('Error procesando modelo: ' + vrmError.message));
                             }
                         },
                         (progress) => {
