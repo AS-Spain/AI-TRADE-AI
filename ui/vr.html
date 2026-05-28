@@ -327,24 +327,33 @@
                 throw new Error('No se especificó URL de VRM');
             }
             
+            console.log('🔄 loadVRM() called with:', vrmUrl);
+            
             try {
                 const gltfLoader = new THREE.GLTFLoader();
+                console.log('✅ GLTFLoader creado');
                 
                 return new Promise((resolve, reject) => {
                     gltfLoader.load(
                         vrmUrl,
                         async (gltf) => {
+                            console.log('✅ GLTF cargado:', gltf);
                             updateLoadingProgress(60);
                             updateLoadingStatus('Procesando modelo VRM...');
                             
                             const model = gltf.scene;
+                            console.log('📦 Model scene:', model);
                             
-                            // Cargar VRM addon
-                            await THREE.VRM.from(gltf).then((vrmData) => {
+                            try {
+                                // Cargar VRM addon
+                                const vrmData = await THREE.VRM.from(gltf);
+                                console.log('✅ VRM data:', vrmData);
+                                
                                 vrm = vrmData;
                                 vrm.scene.scale.set(1, 1, 1);
                                 scene.add(vrm.scene);
                                 
+                                console.log('✅ VRM agregado a la escena');
                                 updateLoadingProgress(80);
                                 updateLoadingStatus('Modelo VRM cargado');
                                 
@@ -352,19 +361,25 @@
                                     '✅ ' + vrmUrl.split('/').pop();
                                 
                                 resolve(vrm);
-                            });
+                            } catch (vrmError) {
+                                console.error('❌ Error procesando VRM:', vrmError);
+                                reject(new Error('Error procesando VRM: ' + vrmError.message));
+                            }
                         },
                         (progress) => {
+                            console.log('📊 Progress:', progress.loaded, '/', progress.total);
                             const percent = 30 + (progress.loaded / progress.total) * 30;
                             updateLoadingProgress(percent);
                         },
                         (error) => {
+                            console.error('❌ Error en gltfLoader.load:', error);
                             updateLoadingStatus(`❌ Error cargando VRM: ${error.message}`);
                             reject(error);
                         }
                     );
                 });
             } catch (err) {
+                console.error('❌ Error en loadVRM:', err);
                 document.getElementById('vrm-status').textContent = '❌ Error al cargar VRM';
                 throw err;
             }
@@ -389,22 +404,38 @@
             updateLoadingStatus('Obteniendo configuración del personaje...');
             
             try {
-                const response = await fetch('/api/vr-character');
-                const data = await response.json();
+                const apiUrl = '/api/vr-character';
+                console.log('📡 Fetching:', apiUrl);
+                
+                const response = await fetch(apiUrl);
+                console.log('📡 Response status:', response.status);
+                
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                }
+                
+                const text = await response.text();
+                console.log('📡 Response text:', text);
+                
+                const data = JSON.parse(text);
+                console.log('📡 Parsed data:', data);
                 
                 document.getElementById('char-name').textContent = data.name || 'VR Character';
                 document.getElementById('char-personality').textContent = data.personality || 'Personalidad no disponible';
                 
                 if (data.vrm_url) {
+                    console.log('🔄 VRM URL:', data.vrm_url);
                     updateLoadingProgress(25);
                     await loadVRM(data.vrm_url);
                     updateLoadingProgress(90);
                 } else {
+                    console.warn('⚠️ No hay modelo VRM configurado');
                     updateLoadingStatus('⚠️ No hay modelo VRM configurado');
                     updateLoadingProgress(90);
                 }
             } catch (err) {
-                updateLoadingStatus('❌ Error cargando personaje: ' + err.message);
+                console.error('❌ Error en loadCharacter:', err);
+                updateLoadingStatus('❌ Error: ' + err.message);
                 console.error(err);
             }
         }
