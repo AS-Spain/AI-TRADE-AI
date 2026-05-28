@@ -426,7 +426,8 @@
             const clock = new THREE.Clock();
             const delta = clock.getDelta();
             
-            if (vrm) {
+            // Solo actualizar si vrm tiene el método update (VRM completo, no fallback GLTF)
+            if (vrm && typeof vrm.update === 'function') {
                 vrm.update(delta);
             }
             
