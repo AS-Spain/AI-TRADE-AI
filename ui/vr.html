@@ -3,544 +3,537 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>VR Character</title>
-    <script src="https://aframe.io/releases/1.4.0/aframe.min.js"></script>
-    <!-- GLTFLoader (usa el THREE que A-Frame ya expone) -->
-    <script src="https://cdn.jsdelivr.net/npm/three@0.150.1/examples/js/loaders/GLTFLoader.js"></script>
-    <!-- VRM loader de Pixiv: versión fijada para compatibilidad -->
-    <script src="https://cdn.jsdelivr.net/npm/@pixiv/three-vrm@0.5.0/dist/three-vrm.js"></script>
+    <title>VR Character - Three.js + VRM</title>
     <style>
-        body { margin: 0; overflow: hidden; font-family: Arial, sans-serif; background: #05080f; color: white; }
-        #hud { position: absolute; top: 12px; left: 12px; z-index: 10; width: 300px; padding: 14px; background: rgba(0,0,0,0.75); border: 1px solid #00ffcc; border-radius: 12px; }
-        #hud h1 { margin: 0 0 10px; font-size: 1.2rem; }
-        #hud p { margin: 6px 0; font-size: 0.95rem; line-height: 1.3; }
-        #response-text { min-height: 48px; margin-bottom: 10px; white-space: pre-wrap; }
-        #user-input { width: calc(100% - 80px); padding: 10px; border-radius: 8px; border: 1px solid #333; background: #111; color: white; }
-        #send-button { width: 68px; padding: 10px; margin-left: 8px; border-radius: 8px; border: none; background: #00ffcc; color: #000; font-weight: bold; cursor: pointer; }
-        #controls { display: flex; align-items: center; margin-top: 10px; }
-        #drop-zone { margin-top: 12px; padding: 12px; border: 2px dashed #00ffcc; border-radius: 12px; text-align: center; color: #a6f5e0; background: rgba(0,255,204,0.05); }
-        #drop-zone.dragover { background: rgba(0,255,204,0.18); border-color: #ffffff; }
-        a { color: #00ffcc; text-decoration: none; }
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { 
+            font-family: 'Courier New', monospace; 
+            background: #05080f; 
+            color: white; 
+            overflow: hidden; 
+        }
+        
+        #canvas-container { 
+            width: 100vw; 
+            height: 100vh; 
+            position: relative; 
+        }
+        
+        canvas { 
+            display: block; 
+            width: 100%; 
+            height: 100%;
+        }
+        
+        /* Barra de carga */
+        #loading-bar {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 5px;
+            background: rgba(0, 255, 204, 0.1);
+            z-index: 1000;
+        }
+        
+        #loading-progress {
+            height: 100%;
+            width: 0%;
+            background: linear-gradient(90deg, #00ffcc, #88ff8f, #00ffcc);
+            box-shadow: 0 0 20px rgba(0, 255, 204, 0.8);
+            transition: width 0.15s ease;
+        }
+        
+        #loading-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.95);
+            z-index: 999;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: opacity 0.5s, visibility 0.5s;
+        }
+        
+        #loading-overlay.hidden {
+            opacity: 0;
+            visibility: hidden;
+        }
+        
+        #loading-content {
+            text-align: center;
+        }
+        
+        #loading-content h2 {
+            font-size: 1.5rem;
+            margin-bottom: 20px;
+            color: #00ffcc;
+        }
+        
+        #loading-content p {
+            font-size: 0.9rem;
+            color: #a6f5e0;
+            margin: 10px 0;
+        }
+        
+        .spinner {
+            width: 40px;
+            height: 40px;
+            margin: 20px auto;
+            border: 3px solid rgba(0, 255, 204, 0.2);
+            border-top: 3px solid #00ffcc;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+        
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        
+        /* HUD */
+        #hud { 
+            position: fixed; 
+            top: 12px; 
+            left: 12px; 
+            z-index: 100; 
+            width: 330px; 
+            padding: 14px; 
+            background: rgba(0, 0, 0, 0.9); 
+            border: 2px solid #00ffcc; 
+            border-radius: 12px; 
+            max-height: 85vh;
+            overflow-y: auto;
+        }
+        
+        #hud h1 { 
+            margin: 0 0 10px; 
+            font-size: 1.2rem; 
+            color: #00ffcc;
+        }
+        
+        #hud p { 
+            margin: 6px 0; 
+            font-size: 0.85rem; 
+            line-height: 1.4; 
+            color: #ccc;
+        }
+        
+        #response-text { 
+            min-height: 40px; 
+            margin: 10px 0; 
+            white-space: pre-wrap; 
+            background: rgba(0, 255, 204, 0.05);
+            padding: 10px;
+            border-radius: 6px;
+            border-left: 3px solid #00ffcc;
+            color: #a6f5e0;
+            font-size: 0.8rem;
+        }
+        
+        #user-input { 
+            width: calc(100% - 80px); 
+            padding: 10px; 
+            border-radius: 6px; 
+            border: 1px solid #00ffcc; 
+            background: #000; 
+            color: #00ffcc;
+            font-family: 'Courier New', monospace;
+            font-size: 0.9rem;
+        }
+        
+        #user-input::placeholder {
+            color: #005555;
+        }
+        
+        #send-button { 
+            width: 68px; 
+            padding: 10px; 
+            margin-left: 8px; 
+            border-radius: 6px; 
+            border: none; 
+            background: #00ffcc; 
+            color: #000; 
+            font-weight: bold; 
+            cursor: pointer;
+            transition: all 0.2s;
+            font-size: 0.8rem;
+        }
+        
+        #send-button:hover {
+            background: #88ff8f;
+            box-shadow: 0 0 10px rgba(0, 255, 204, 0.5);
+        }
+        
+        #send-button:active {
+            transform: scale(0.95);
+        }
+        
+        #controls { 
+            display: flex; 
+            align-items: center; 
+            margin-top: 10px; 
+            gap: 8px;
+        }
+        
+        #drop-zone { 
+            margin-top: 12px; 
+            padding: 12px; 
+            border: 2px dashed #00ffcc; 
+            border-radius: 8px; 
+            text-align: center; 
+            color: #a6f5e0; 
+            background: rgba(0, 255, 204, 0.05); 
+            font-size: 0.8rem;
+            transition: all 0.2s;
+            cursor: pointer;
+        }
+        
+        #drop-zone.dragover { 
+            background: rgba(0, 255, 204, 0.2); 
+            border-color: #88ff8f;
+            transform: scale(1.02);
+        }
+        
+        a { 
+            color: #00ffcc; 
+            text-decoration: none; 
+            font-size: 0.8rem;
+        }
+        
+        .error-msg {
+            color: #ff6b6b;
+            font-size: 0.8rem;
+            margin-top: 10px;
+            padding: 8px;
+            background: rgba(255, 100, 100, 0.1);
+            border-radius: 4px;
+            border-left: 3px solid #ff6b6b;
+        }
     </style>
 </head>
 <body>
+    <div id="loading-bar">
+        <div id="loading-progress"></div>
+    </div>
+    
+    <div id="loading-overlay">
+        <div id="loading-content">
+            <div class="spinner"></div>
+            <h2>Cargando escena VR...</h2>
+            <p id="loading-status">Inicializando Three.js</p>
+        </div>
+    </div>
+    
+    <div id="canvas-container"></div>
+    
     <div id="hud">
-        <h1 id="char-name">Personaje VR</h1>
+        <h1 id="char-name">VR Character</h1>
         <p id="char-personality">Cargando personalidad...</p>
-        <p id="char-status">Estado: idle</p>
-        <div id="response-text">Escribe algo en el campo y pulsa ENVIAR para ver la reacción del personaje.</div>
-        <div id="drop-zone">Arrastra tu archivo <strong>.vrm</strong> aquí para configurar el personaje (o haz click)</div>
-        <input type="file" id="vrm-file-input" accept=".vrm" style="display:none">
-        <div id="loading-wrap" style="margin-top:10px; display:none">
-            <div id="loading-text" style="font-size:0.9rem; margin-bottom:6px">Cargando modelo...</div>
-            <div id="loading-bar" style="width:100%; height:10px; background:#222; border-radius:6px; overflow:hidden; border:1px solid #333">
-                <div id="loading-fill" style="width:0%; height:100%; background:linear-gradient(90deg,#00ffcc,#5affd6);"></div>
-            </div>
+        <p id="char-status">Estado: <span id="status-value">idle</span></p>
+        <div id="response-text">Escribe algo en el campo y pulsa ENVIAR para hablar con el personaje.</div>
+        <div id="drop-zone">
+            📁 Arrastra tu <strong>.vrm</strong> aquí o haz click
+            <input type="file" id="vrm-file-input" accept=".vrm" style="display: none;">
         </div>
         <div id="controls">
-            <input id="user-input" type="text" placeholder="Dile algo..." autocomplete="off">
-            <button id="send-button" onclick="sendChat()">ENVIAR</button>
+            <input type="text" id="user-input" placeholder="Di algo..." autocomplete="off">
+            <button id="send-button">ENVIAR</button>
         </div>
-        <div id="emotion-controls" style="margin-top:12px; display:flex; gap:8px; flex-wrap:wrap;">
-            <button onclick="applyPresetEmotion('happy')" style="background:#5cff6a; border:none; padding:6px 8px; border-radius:8px; cursor:pointer">😊 Happy</button>
-            <button onclick="applyPresetEmotion('sad')" style="background:#6a99ff; border:none; padding:6px 8px; border-radius:8px; cursor:pointer">😢 Sad</button>
-            <button onclick="applyPresetEmotion('angry')" style="background:#ff7a5f; border:none; padding:6px 8px; border-radius:8px; cursor:pointer">😡 Angry</button>
-            <button onclick="applyPresetEmotion('surprised')" style="background:#ffc84f; border:none; padding:6px 8px; border-radius:8px; cursor:pointer">😮 Surprise</button>
-            <button onclick="applyPresetEmotion('neutral')" style="background:#aaaaaa; border:none; padding:6px 8px; border-radius:8px; cursor:pointer">😐 Neutral</button>
-            <div style="display:flex; align-items:center; gap:8px; margin-left:auto;">
-                <label for="blend-intensity" style="font-size:0.85rem; margin:0 6px 0 0">Intensity</label>
-                <input id="blend-intensity" type="range" min="0" max="1" step="0.01" value="1" style="width:120px">
-            </div>
-        </div>
-        <div id="anim-controls" style="margin-top:10px; display:flex; gap:8px; align-items:center;">
-            <select id="anim-list" style="min-width:160px">
-                <option value="">-- Animations --</option>
-            </select>
-            <button onclick="playSelectedAnim()" style="padding:6px 8px; border-radius:6px">Play</button>
-            <button onclick="stopAnim()" style="padding:6px 8px; border-radius:6px">Stop</button>
-            <label style="margin-left:6px">Speed</label>
-            <input id="anim-speed" type="range" min="0.1" max="2" step="0.05" value="1" style="width:100px">
-            <label style="margin-left:6px">Loop</label>
-            <input id="anim-loop" type="checkbox" checked>
-        </div>
-        <p style="margin-top:12px; font-size:0.9rem;">Presiona el botón <strong>Enter VR</strong> en la parte inferior de la escena para entrar en modo VR compatible con WebXR.</p>
-        <p><a href="/">Volver a la interfaz normal</a></p>
+        <p style="margin-top: 12px; font-size: 0.75rem; color: #888;">
+            💡 Modelo VRM: <span id="vrm-status">Cargando...</span>
+        </p>
+        <p><a href="/">← Volver a chat</a></p>
     </div>
 
-    <a-scene background="color: #101020" vr-mode-ui="enabled: true" embedded>
-        <a-assets>
-            <img id="avatar-img" src="" crossorigin="anonymous">
-        </a-assets>
-
-        <a-entity position="0 1.6 4">
-            <a-camera></a-camera>
-        </a-entity>
-
-        <a-plane position="0 0 0" rotation="-90 0 0" width="12" height="12" color="#111"></a-plane>
-        <a-entity id="avatar-model" gltf-model="" scale="1 1 1" position="0 0.8 -2.3" rotation="0 180 0" visible="false"></a-entity>
-        <a-entity id="avatar-plane" geometry="primitive: plane; width: 2.4; height: 2.4" material="src: #avatar-img; transparent: true; opacity: 0.95" position="0 1.6 -3"></a-entity>
-        <a-entity id="character-body" geometry="primitive: sphere; radius: 0.45" material="color: #44ccff; shader: standard" position="0 1 -2.2"></a-entity>
-        <a-entity id="mouth" geometry="primitive: plane; width: 0.35; height: 0.08" material="color: #ffffff; shader: flat" position="0 0.75 -2.05" rotation="0 0 0" visible="true"></a-entity>
-        <a-entity id="emotion-ring" geometry="primitive: torus; radius: 0.9; radiusTubular: 0.05" material="color: #00ffcc; opacity: 0.8" position="0 1 -2.2" rotation="90 0 0"></a-entity>
-        <a-entity id="emotion-pulse" geometry="primitive: ring; radius-inner: 1.0; radius-outer: 1.1" material="color: #00ffcc; opacity: 0.6" position="0 1 -2.2" rotation="90 0 0"></a-entity>
-
-        <a-entity light="type: ambient; intensity: 0.5"></a-entity>
-        <a-entity light="type: directional; intensity: 0.8; color: #99ccff" position="-1 2 1"></a-entity>
-        <a-sky color="#081020"></a-sky>
-    </a-scene>
-
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/GLTFLoader.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three-vrm@0.6.10/lib/three-vrm.umd.js"></script>
+    
     <script>
-        const charName = document.getElementById('char-name');
-        const charPersonality = document.getElementById('char-personality');
-        const charStatus = document.getElementById('char-status');
-        const responseText = document.getElementById('response-text');
-        const avatarImg = document.getElementById('avatar-img');
-        const body = document.getElementById('character-body');
-        const ring = document.getElementById('emotion-ring');
-        const pulse = document.getElementById('emotion-pulse');
-        const mouth = document.getElementById('mouth');
-        const avatarModel = document.getElementById('avatar-model');
-        const dropZone = document.getElementById('drop-zone');
-        const userInput = document.getElementById('user-input');
-
-        const emotionMap = {
-            happy: { color: '#88ff8f', ring: '#5cff6a', text: 'Feliz' },
-            sad: { color: '#5f8cff', ring: '#6a99ff', text: 'Triste' },
-            angry: { color: '#ff5f5f', ring: '#ff7a5f', text: 'Enojado' },
-            surprised: { color: '#ffdd55', ring: '#ffc84f', text: 'Sorprendido' },
-            idle: { color: '#44ccff', ring: '#00ffcc', text: 'Idle' },
-            neutral: { color: '#cccccc', ring: '#aaaaaa', text: 'Neutral' }
+        // Estado global
+        let scene, camera, renderer;
+        let vrm = null;
+        let mixer = null;
+        
+        const emotionColors = {
+            happy: 0x88ff8f,
+            sad: 0x5f8cff,
+            angry: 0xff5f5f,
+            surprised: 0xffdd55,
+            idle: 0x44ccff,
+            neutral: 0xcccccc
         };
-
-        async function loadCharacter() {
-            const response = await fetch('/api/vr-character');
-            const data = await response.json();
-            charName.innerText = data.name || 'Personaje VR';
-            charPersonality.innerText = data.personality || 'Personalidad no disponible';
-            if (data.vrm_url) {
-                setVrmModel(data.vrm_url);
-                dropZone.innerText = `Cargado: ${data.vrm_url.split('/').pop()}`;
-            } else if (data.avatar_url) {
-                avatarImg.setAttribute('src', data.avatar_url);
-            } else {
-                avatarImg.setAttribute('src', 'https://cdn.aframe.io/a-painter/images/floor.jpg');
+        
+        // Actualizar barra de carga
+        function updateLoadingProgress(percent) {
+            document.getElementById('loading-progress').style.width = percent + '%';
+        }
+        
+        function updateLoadingStatus(text) {
+            document.getElementById('loading-status').textContent = text;
+        }
+        
+        function hideLoading() {
+            document.getElementById('loading-overlay').classList.add('hidden');
+        }
+        
+        // Inicializar Three.js
+        async function initThreeJS() {
+            updateLoadingStatus('Inicializando Three.js...');
+            
+            const container = document.getElementById('canvas-container');
+            scene = new THREE.Scene();
+            scene.background = new THREE.Color(0x05080f);
+            
+            camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+            camera.position.set(0, 1.2, 1.5);
+            camera.lookAt(0, 1, 0);
+            
+            renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            renderer.setPixelRatio(window.devicePixelRatio);
+            container.appendChild(renderer.domElement);
+            
+            // Iluminación
+            const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
+            scene.add(ambientLight);
+            
+            const directionalLight = new THREE.DirectionalLight(0x99ccff, 0.8);
+            directionalLight.position.set(-1, 2, 1);
+            scene.add(directionalLight);
+            
+            // Suelo
+            const floorGeometry = new THREE.PlaneGeometry(20, 20);
+            const floorMaterial = new THREE.MeshStandardMaterial({ color: 0x1a1a2e });
+            const floor = new THREE.Mesh(floorGeometry, floorMaterial);
+            floor.rotation.x = -Math.PI / 2;
+            floor.position.y = -0.1;
+            scene.add(floor);
+            
+            updateLoadingProgress(20);
+            updateLoadingStatus('Scene configurada');
+        }
+        
+        // Cargar VRM
+        async function loadVRM(vrmUrl) {
+            updateLoadingStatus(`Cargando modelo VRM: ${vrmUrl.split('/').pop()}`);
+            updateLoadingProgress(30);
+            
+            if (!vrmUrl) {
+                throw new Error('No se especificó URL de VRM');
             }
-        }
-
-        function setVrmModel(url) {
-            if (!url) return;
-            // si ya hay un VRM cargado, elimínalo
+            
             try {
-                if (window.currentVrm && window.currentVrm.scene) {
-                    avatarModel.object3D.remove(window.currentVrm.scene);
-                    window.currentVrm = null;
-                }
-            } catch (e) { console.warn('No previous VRM to remove', e); }
-
-            // Intentamos cargar como VRM usando Three + three-vrm
-            loadVrmWithThree(url).catch(err => {
-                console.error('Fallo al cargar con three-vrm, fallback a gltf-model', err);
-                avatarModel.setAttribute('gltf-model', url);
-                avatarModel.setAttribute('visible', 'true');
-                document.getElementById('avatar-plane').setAttribute('visible', 'false');
-            });
-        }
-
-        async function loadVrmWithThree(url) {
-            return new Promise((resolve, reject) => {
-                const wrap = document.getElementById('loading-wrap');
-                const fill = document.getElementById('loading-fill');
-                const text = document.getElementById('loading-text');
-                wrap.style.display = 'block';
-                text.innerText = 'Descargando VRM...';
-
-                // Usa el THREE que A-Frame inyecta
-                const THREE = window.THREE || AFRAME.THREE;
-                if (!THREE) return reject(new Error('THREE no está disponible'));                
-
-                // GLTFLoader debería haberse registrado en THREE por el script incluido
-                if (typeof THREE.GLTFLoader === 'undefined') {
-                    return reject(new Error('GLTFLoader no disponible en THREE'));
-                }
-
-                const loader = new THREE.GLTFLoader();
-                loader.setCrossOrigin && loader.setCrossOrigin('anonymous');
-
-                loader.load(url,
-                    async function(gltf) {
-                        try {
-                            // Si la librería three-vrm está presente, usarla
-                            let vrm = null;
-                            if (THREE.VRM && typeof THREE.VRM.from === 'function') {
-                                vrm = await THREE.VRM.from(gltf);
-                            } else if (window.VRM && typeof window.VRM.from === 'function') {
-                                vrm = await window.VRM.from(gltf);
-                            }
-
-                            // función auxiliar para inicializar animaciones si existen
-                            const initAnimations = (root, animations) => {
-                                try {
-                                    if (animations && animations.length) {
-                                        const mixer = new THREE.AnimationMixer(root);
-                                        window.currentMixer = mixer;
-                                        window.currentActions = {};
-                                        const select = document.getElementById('anim-list');
-                                        // limpiar opciones excepto la primera
-                                        select.innerHTML = '<option value="">-- Animations --</option>';
-                                        animations.forEach((clip, idx) => {
-                                            const name = clip.name || `anim_${idx}`;
-                                            const opt = document.createElement('option');
-                                            opt.value = idx;
-                                            opt.text = name;
-                                            select.appendChild(opt);
-                                            const action = mixer.clipAction(clip);
-                                            action.clampWhenFinished = true;
-                                            window.currentActions[name] = action;
-                                        });
-                                        // iniciar loop de actualización
-                                        if (!window._vrmMixerLoop) {
-                                            window._vrmLastTime = performance.now();
-                                            window._vrmMixerLoop = true;
-                                            const tick = (now) => {
-                                                if (!window._vrmMixerLoop) return;
-                                                const dt = (now - (window._vrmLastTime || now)) / 1000;
-                                                window._vrmLastTime = now;
-                                                try { if (window.currentMixer) window.currentMixer.update(dt * (parseFloat(document.getElementById('anim-speed')?.value || '1'))); } catch(e) {}
-                                                requestAnimationFrame(tick);
-                                            };
-                                            requestAnimationFrame(tick);
-                                        }
-                                    }
-                                } catch (err) { console.warn('initAnimations error', err); }
-                            };
-
-                            if (vrm && vrm.scene) {
-                                // ajusta transformaciones básicas
-                                vrm.scene.position.set(0, 0, 0);
-                                vrm.scene.rotation.set(0, Math.PI, 0);
+                const gltfLoader = new THREE.GLTFLoader();
+                
+                return new Promise((resolve, reject) => {
+                    gltfLoader.load(
+                        vrmUrl,
+                        async (gltf) => {
+                            updateLoadingProgress(60);
+                            updateLoadingStatus('Procesando modelo VRM...');
+                            
+                            const model = gltf.scene;
+                            
+                            // Cargar VRM addon
+                            await THREE.VRM.from(gltf).then((vrmData) => {
+                                vrm = vrmData;
                                 vrm.scene.scale.set(1, 1, 1);
-                                window.currentVrm = vrm;
-                                avatarModel.object3D.add(vrm.scene);
-                                avatarModel.setAttribute('visible', 'true');
-                                document.getElementById('avatar-plane').setAttribute('visible', 'false');
-                                // inicializar animaciones desde gltf.animations si existen
-                                initAnimations(vrm.scene, gltf.animations);
-                                wrap.style.display = 'none';
+                                scene.add(vrm.scene);
+                                
+                                updateLoadingProgress(80);
+                                updateLoadingStatus('Modelo VRM cargado');
+                                
+                                document.getElementById('vrm-status').textContent = 
+                                    '✅ ' + vrmUrl.split('/').pop();
+                                
                                 resolve(vrm);
-                            } else {
-                                // Fallback: añadir el gltf.scene si no hay VRM helper
-                                gltf.scene.position.set(0, 0, 0);
-                                gltf.scene.rotation.set(0, Math.PI, 0);
-                                avatarModel.object3D.add(gltf.scene);
-                                avatarModel.setAttribute('visible', 'true');
-                                document.getElementById('avatar-plane').setAttribute('visible', 'false');
-                                // inicializar animaciones desde gltf.animations
-                                initAnimations(gltf.scene, gltf.animations);
-                                wrap.style.display = 'none';
-                                resolve(gltf.scene);
-                            }
-                        } catch (err) {
-                            wrap.style.display = 'none';
-                            reject(err);
+                            });
+                        },
+                        (progress) => {
+                            const percent = 30 + (progress.loaded / progress.total) * 30;
+                            updateLoadingProgress(percent);
+                        },
+                        (error) => {
+                            updateLoadingStatus(`❌ Error cargando VRM: ${error.message}`);
+                            reject(error);
                         }
-                    },
-                    function(xhr) {
-                        if (xhr && xhr.lengthComputable) {
-                            const pct = Math.floor((xhr.loaded / xhr.total) * 100);
-                            fill.style.width = pct + '%';
-                            text.innerText = 'Descargando VRM... ' + pct + '%';
-                        }
-                    },
-                    function(err) {
-                        wrap.style.display = 'none';
-                        reject(err);
-                    }
-                );
-            });
-        }
-
-        function setEmotion(emotion) {
-            const normalized = (emotion || 'idle').toLowerCase();
-            const info = emotionMap[normalized] || emotionMap.neutral;
-            charStatus.innerText = `Estado: ${info.text}`;
-            body.setAttribute('material', 'color', info.color);
-            ring.setAttribute('material', 'color', info.ring);
-            pulse.setAttribute('material', 'color', info.ring);
-            pulse.setAttribute('animation', `property: scale; from: 1 1 1; to: 1.15 1.15 1.15; dur: 700; dir: alternate; loop: true`);
-
-            // Aplicar blendshapes/animation usando three-vrm si está presente
-            const intensity = parseFloat(document.getElementById('blend-intensity')?.value || '1');
-            applyBlendForEmotion(normalized, intensity);
-        }
-
-        function applyPresetEmotion(name) {
-            const intensity = parseFloat(document.getElementById('blend-intensity')?.value || '1');
-            setEmotion(name);
-            applyBlendForEmotion(name, intensity);
-        }
-
-        function applyBlendForEmotion(name, intensity) {
-            // Mapear emociones a posibles nombres de blendShapeGroups
-            const map = {
-                happy: ['Joy', 'Happy', 'smile', 'joy'],
-                sad: ['Sad', 'Sorrow', 'sadness'],
-                angry: ['Angry', 'Anger', 'angry'],
-                surprised: ['Surprised', 'Surprise', 'surprised'],
-                neutral: ['Neutral', 'neutral', 'relaxed']
-            };
-
-            const candidates = map[name] || [name];
-            // Intenta aplicar el primer blendshapeGroup disponible
-            for (const c of candidates) {
-                if (applyBlendShapeGroup(c, intensity)) return true;
-            }
-            return false;
-        }
-
-        function applyBlendShapeGroup(groupName, value) {
-            const vrm = window.currentVrm;
-            if (!vrm) return false;
-
-            const proxy = vrm.blendShapeProxy || (vrm && vrm.scene && vrm.scene.blendShapeProxy) || null;
-            // Si existe la API oficial
-            if (proxy && proxy.blendShapeGroups) {
-                const group = proxy.blendShapeGroups.find(g => (g.name && g.name.toLowerCase() === groupName.toLowerCase()) || (g.name && g.name.toLowerCase().includes(groupName.toLowerCase())));
-                if (group) {
-                    try {
-                        if (typeof proxy.setValue === 'function') {
-                            // algunos builds aceptan name o index
-                            try { proxy.setValue(group.name, value); } catch(e) { proxy.setValue(group.index || group, value); }
-                            return true;
-                        }
-                    } catch (e) { console.warn('proxy.setValue error', e); }
-
-                    // Fallback: aplicar binds manualmente si existen
-                    if (group.binds && Array.isArray(group.binds)) {
-                        group.binds.forEach(bind => {
-                            try {
-                                const node = bind.node || bind.nodeRef || null;
-                                const mName = bind.morphTargetName || bind.blendShapeName || bind.indexName || bind.index;
-                                if (node && node.morphTargetDictionary && node.morphTargetInfluences) {
-                                    const idx = node.morphTargetDictionary[mName];
-                                    if (typeof idx === 'number') node.morphTargetInfluences[idx] = value;
-                                } else {
-                                    // intentar buscar por nombre dentro de la escena
-                                    vrm.scene.traverse(n => {
-                                        if (n.isMesh && n.morphTargetDictionary && n.morphTargetInfluences) {
-                                            const idx = n.morphTargetDictionary[mName];
-                                            if (typeof idx === 'number') n.morphTargetInfluences[idx] = value;
-                                        }
-                                    });
-                                }
-                            } catch (err) { console.warn('bind apply error', err); }
-                        });
-                        return true;
-                    }
-                }
-            }
-
-            // Último recurso: buscar morph targets por nombre en todos los meshes
-            let applied = false;
-            vrm.scene.traverse(n => {
-                if (n.isMesh && n.morphTargetDictionary && n.morphTargetInfluences) {
-                    for (const key in n.morphTargetDictionary) {
-                        if (key.toLowerCase().includes(groupName.toLowerCase())) {
-                            const idx = n.morphTargetDictionary[key];
-                            n.morphTargetInfluences[idx] = value;
-                            applied = true;
-                        }
-                    }
-                }
-            });
-            return applied;
-        }
-
-        function setSpeaking(isSpeaking) {
-            if (!mouth) return;
-            if (isSpeaking) {
-                mouth.setAttribute('visible', 'true');
-                mouth.setAttribute('animation', 'property: scale; to: 1 1.5 1; dur: 120; dir: alternate; loop: true');
-                mouth.setAttribute('material', 'color', '#ffeb8f');
-            } else {
-                mouth.removeAttribute('animation');
-                mouth.setAttribute('scale', '1 1 1');
-                mouth.setAttribute('material', 'color', '#ffffff');
-            }
-        }
-
-        function speakResponse(text) {
-            if (!('speechSynthesis' in window) || !text) {
-                setSpeaking(false);
-                return;
-            }
-
-            const utterance = new SpeechSynthesisUtterance(text);
-            utterance.lang = 'es-ES';
-            setSpeaking(true);
-            utterance.onend = () => setSpeaking(false);
-            utterance.onerror = () => setSpeaking(false);
-            window.speechSynthesis.speak(utterance);
-        }
-
-        async function sendChat() {
-            const text = userInput.value.trim();
-            if (!text) return;
-            responseText.innerText = 'Enviando mensaje...';
-            try {
-                const result = await fetch('/api/chat', {
-                    method: 'POST',
-                    headers: {'Content-Type': 'application/json'},
-                    body: JSON.stringify({text})
+                    );
                 });
-                const data = await result.json();
-                responseText.innerText = data.text || 'No hubo respuesta.';
-                setEmotion(data.emotion || 'idle');
-                speakResponse(data.text);
             } catch (err) {
-                responseText.innerText = 'Error de conexión con la IA.';
-                setEmotion('neutral');
-                setSpeaking(false);
+                document.getElementById('vrm-status').textContent = '❌ Error al cargar VRM';
+                throw err;
             }
-            userInput.value = '';
         }
-
-        async function uploadVrmFile(file) {
-            // muestra barra de carga
-            const wrap = document.getElementById('loading-wrap');
-            const fill = document.getElementById('loading-fill');
-            const text = document.getElementById('loading-text');
-            wrap.style.display = 'block';
-            fill.style.width = '0%';
-            text.innerText = 'Subiendo archivo...';
-
-            return new Promise((resolve) => {
-                const xhr = new XMLHttpRequest();
-                const form = new FormData();
-                form.append('vrm', file);
-
-                xhr.upload.onprogress = function(e) {
-                    if (e.lengthComputable) {
-                        const pct = Math.floor((e.loaded / e.total) * 100);
-                        fill.style.width = pct + '%';
-                        text.innerText = `Subiendo archivo... ${pct}%`;
-                    }
-                };
-
-                xhr.onreadystatechange = function() {
-                    if (xhr.readyState === 4) {
-                        try {
-                            const data = JSON.parse(xhr.responseText || '{}');
-                            if (xhr.status >= 200 && xhr.status < 300 && data.status === 'ok') {
-                                dropZone.innerText = `VRM cargado: ${data.filename}`;
-                                setVrmModel(data.vrm_url);
-                                text.innerText = 'Cargando modelo en la escena...';
-                                // Espera a que el modelo se cargue (evento model-loaded)
-                            } else {
-                                dropZone.innerText = `Error: ${data.message || 'No se pudo cargar'}`;
-                                wrap.style.display = 'none';
-                            }
-                        } catch (err) {
-                            dropZone.innerText = 'Error en la respuesta del servidor.';
-                            wrap.style.display = 'none';
-                        }
-                        resolve();
-                    }
-                };
-
-                xhr.open('POST', '/api/upload-vrm');
-                xhr.send(form);
-            });
-        }
-
-        function setDropZoneState(active) {
-            if (active) dropZone.classList.add('dragover');
-            else dropZone.classList.remove('dragover');
-        }
-
-        dropZone.addEventListener('dragover', function(event) {
-            event.preventDefault();
-            setDropZoneState(true);
-        });
-
-        dropZone.addEventListener('dragleave', function(event) {
-            event.preventDefault();
-            setDropZoneState(false);
-        });
-
-        dropZone.addEventListener('drop', function(event) {
-            event.preventDefault();
-            setDropZoneState(false);
-            const file = event.dataTransfer.files[0];
-            if (file && file.name.toLowerCase().endsWith('.vrm')) {
-                uploadVrmFile(file);
-            } else {
-                dropZone.innerText = 'Arrastra un archivo .vrm válido.';
+        
+        // Animar
+        function animate() {
+            requestAnimationFrame(animate);
+            
+            const clock = new THREE.Clock();
+            const delta = clock.getDelta();
+            
+            if (vrm) {
+                vrm.update(delta);
             }
-        });
-
-        // Soporta click para seleccionar archivo y mejor manejo a nivel ventana
-        dropZone.addEventListener('click', () => document.getElementById('vrm-file-input').click());
-        window.addEventListener('dragover', (e) => e.preventDefault());
-        window.addEventListener('drop', (e) => e.preventDefault());
-
-        document.getElementById('vrm-file-input').addEventListener('change', function(e) {
-            const f = e.target.files[0];
-            if (f && f.name.toLowerCase().endsWith('.vrm')) uploadVrmFile(f);
-        });
-
-        userInput.addEventListener('keydown', function(event) {
-            if (event.key === 'Enter') sendChat();
-        });
-
-        loadCharacter();
-        setEmotion('idle');
-
-        // Feedback de carga de modelos A-Frame
-        avatarModel.addEventListener('model-loaded', function() {
-            const wrap = document.getElementById('loading-wrap');
-            const fill = document.getElementById('loading-fill');
-            const text = document.getElementById('loading-text');
-            fill.style.width = '100%';
-            text.innerText = 'Modelo cargado';
-            setTimeout(() => { wrap.style.display = 'none'; text.innerText = 'Cargando modelo...'; fill.style.width = '0%'; }, 900);
-        });
-
-        avatarModel.addEventListener('model-error', function(e) {
-            const wrap = document.getElementById('loading-wrap');
-            wrap.style.display = 'none';
-            dropZone.innerText = 'Error al cargar el modelo en la escena. Comprueba la consola del navegador.';
-            console.error('Model error', e);
-        });
-
-        // Controles de animación: reproducir/pausar desde la UI
-        function playSelectedAnim() {
-            const sel = document.getElementById('anim-list');
-            const idx = sel.value;
-            if (!idx) return;
-            const name = sel.options[sel.selectedIndex].text;
-            const actions = window.currentActions || {};
-            const action = actions[name] || Object.values(actions)[idx];
-            if (!action) return;
-            const loop = document.getElementById('anim-loop').checked;
-            action.loop = loop ? THREE.LoopRepeat : THREE.LoopOnce;
-            action.reset();
-            action.play();
+            
+            renderer.render(scene, camera);
         }
-
-        function stopAnim() {
+        
+        // Cargar personaje desde API
+        async function loadCharacter() {
+            updateLoadingStatus('Obteniendo configuración del personaje...');
+            
             try {
-                if (window.currentMixer) {
-                    for (const k in window.currentActions) {
-                        try { window.currentActions[k].stop(); } catch(e) {}
-                    }
+                const response = await fetch('/api/vr-character');
+                const data = await response.json();
+                
+                document.getElementById('char-name').textContent = data.name || 'VR Character';
+                document.getElementById('char-personality').textContent = data.personality || 'Personalidad no disponible';
+                
+                if (data.vrm_url) {
+                    updateLoadingProgress(25);
+                    await loadVRM(data.vrm_url);
+                    updateLoadingProgress(90);
+                } else {
+                    updateLoadingStatus('⚠️ No hay modelo VRM configurado');
+                    updateLoadingProgress(90);
                 }
-            } catch (e) { console.warn('stopAnim error', e); }
+            } catch (err) {
+                updateLoadingStatus('❌ Error cargando personaje: ' + err.message);
+                console.error(err);
+            }
         }
-
-        // Ajustar velocidad en tiempo real
-        document.getElementById('anim-speed').addEventListener('input', function() {
-            // la velocidad se aplica en el bucle que ya multiplica dt
+        
+        // Enviar mensaje
+        async function sendChat() {
+            const input = document.getElementById('user-input');
+            const text = input.value.trim();
+            
+            if (!text) return;
+            
+            document.getElementById('response-text').textContent = 'Enviando...';
+            input.value = '';
+            
+            try {
+                const response = await fetch('/api/chat', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ text })
+                });
+                
+                const data = await response.json();
+                document.getElementById('response-text').textContent = data.text || 'Sin respuesta';
+                document.getElementById('status-value').textContent = (data.emotion || 'idle').toUpperCase();
+                
+                // Hablar
+                if (window.speechSynthesis) {
+                    const utterance = new SpeechSynthesisUtterance(data.text);
+                    utterance.lang = 'es-ES';
+                    window.speechSynthesis.speak(utterance);
+                }
+            } catch (err) {
+                document.getElementById('response-text').innerHTML = 
+                    `<span class="error-msg">❌ Error: ${err.message}</span>`;
+            }
+        }
+        
+        // Event listeners
+        document.getElementById('send-button').addEventListener('click', sendChat);
+        document.getElementById('user-input').addEventListener('keydown', (e) => {
+            if (e.key === 'Enter') sendChat();
         });
+        
+        // Drag and drop VRM
+        const dropZone = document.getElementById('drop-zone');
+        const fileInput = document.getElementById('vrm-file-input');
+        
+        dropZone.addEventListener('click', () => fileInput.click());
+        
+        dropZone.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            dropZone.classList.add('dragover');
+        });
+        
+        dropZone.addEventListener('dragleave', () => {
+            dropZone.classList.remove('dragover');
+        });
+        
+        dropZone.addEventListener('drop', (e) => {
+            e.preventDefault();
+            dropZone.classList.remove('dragover');
+            const file = e.dataTransfer.files[0];
+            if (file && file.name.endsWith('.vrm')) {
+                handleVRMUpload(file);
+            }
+        });
+        
+        fileInput.addEventListener('change', (e) => {
+            const file = e.target.files[0];
+            if (file) handleVRMUpload(file);
+        });
+        
+        async function handleVRMUpload(file) {
+            const formData = new FormData();
+            formData.append('vrm', file);
+            
+            updateLoadingStatus(`Subiendo ${file.name}...`);
+            document.getElementById('loading-overlay').classList.remove('hidden');
+            
+            try {
+                const response = await fetch('/api/upload-vrm', {
+                    method: 'POST',
+                    body: formData
+                });
+                
+                const data = await response.json();
+                if (data.status === 'ok') {
+                    // Remover VRM anterior
+                    if (vrm && vrm.scene.parent) {
+                        scene.remove(vrm.scene);
+                    }
+                    vrm = null;
+                    
+                    // Cargar nuevo
+                    await loadVRM(data.vrm_url);
+                    updateLoadingProgress(95);
+                    hideLoading();
+                    dropZone.textContent = `✅ VRM cargado: ${file.name}`;
+                } else {
+                    throw new Error(data.message || 'Error desconocido');
+                }
+            } catch (err) {
+                updateLoadingStatus('❌ Error: ' + err.message);
+                setTimeout(hideLoading, 2000);
+            }
+        }
+        
+        // Resize handler
+        window.addEventListener('resize', () => {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        });
+        
+        // Iniciar
+        (async () => {
+            try {
+                await initThreeJS();
+                updateLoadingProgress(15);
+                await loadCharacter();
+                updateLoadingProgress(95);
+                animate();
+                updateLoadingProgress(100);
+                setTimeout(hideLoading, 500);
+            } catch (err) {
+                updateLoadingStatus('❌ Error fatal: ' + err.message);
+                console.error(err);
+            }
+        })();
     </script>
 </body>
 </html>
