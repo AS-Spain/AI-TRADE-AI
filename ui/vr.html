@@ -251,7 +251,7 @@
 
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/GLTFLoader.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/three-vrm@0.6.10/lib/three-vrm.umd.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@pixiv/three-vrm@0.6.10/lib/three-vrm.umd.min.js"></script>
     
     <script>
         // Estado global
@@ -346,10 +346,20 @@
                             
                             try {
                                 // Cargar VRM addon
-                                const vrmData = await THREE.VRM.from(gltf);
-                                console.log('✅ VRM data:', vrmData);
+                                console.log('🔍 Buscando THREE.VRM...');
+                                if (typeof THREE !== 'undefined' && typeof THREE.VRM !== 'undefined') {
+                                    console.log('✅ THREE.VRM disponible');
+                                    const vrmData = await THREE.VRM.from(gltf);
+                                    vrm = vrmData;
+                                } else if (typeof VRM !== 'undefined') {
+                                    console.log('✅ VRM global disponible (no THREE.VRM)');
+                                    const vrmData = await VRM.from(gltf);
+                                    vrm = vrmData;
+                                } else {
+                                    throw new Error('THREE.VRM no está disponible. Verifica que la librería three-vrm se cargó correctamente.');
+                                }
                                 
-                                vrm = vrmData;
+                                console.log('✅ VRM data:', vrm);
                                 vrm.scene.scale.set(1, 1, 1);
                                 scene.add(vrm.scene);
                                 
