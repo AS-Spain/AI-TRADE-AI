@@ -1,16 +1,16 @@
-# 🤖 Intento de IA+ mas modelo VR (Local)
+# 🤖 Intento IA + mas modelo VR (Local)
 
 Una asistente de IA conversacional con voz sintetizada localmente, usando Ollama + Piper + Whisper. Interactúa con personajes animados con emociones y memoria.
 
 ## ✨ Características
 
-- **🧠 IA Local**: Ejecuta LLMs como Llama3, Mistral directamente en tu máquina con Ollama
-- **🎤 Voz Natural**: Síntesis de voz con Piper (sin conexión a internet)
-- **👂 Transcripción**: Faster-Whisper para STT local
-- **🎭 Emociones**: Los personajes responden con emociones (feliz, triste, sarcástico, etc)
+- **🧠 POSIBILIDAD DE IA Local**: Ejecuta LLMs como Llama3, Mistral directamente en tu máquina con Ollama
+- **🎤 Voz Natural**: Síntesis de voz con Piper (sin conexión a internet) (EXISTIR EXISTE PERO NESCSITA MEJORAS)
+- **👂 Transcripción**: Faster-Whisper para STT local (HAY QUE MEJORARLO)
+- **🎭 Emociones**: Personalizacion de cada personaje por separado (NO ESTOY SEGURO DE QUE FUNCIONE BIEN)
 - **💾 Memoria**: Guarda el contexto de conversaciones para continuidad
-- **⚡ Sin dependencias online**: Todo funciona localmente
-- **🔧 Personalizable**: Crea tus propios personajes y skins
+- **🔧 Personalizable**: Puedes meter tu propio modelo .VRM 
+- **   Futuro**: Que pueda reacionar dependiendo lo que le digas (NECESITO UN PC)
 
 ## 📋 Requisitos
 
@@ -77,16 +77,12 @@ Edita `db/config.json` o ejecuta `python wizard.py` para:
 
 MIT License - Usa libremente
 
-TODAVÍA EN DESARROLLO
-
 ## Errores
 
 -Hay que repetir el primer comando (igual) 
 
 -A veces no detecta el servidor de ollama, dale al N y sigue configurando y vuelve a intentar 
 
--Lanza ollama serce por tu cuenta si no puede que no vea la lista de ias descargables
+-Lanza ollama serve por tu cuenta y descargate un modelo si no funciona
 
 -No se si la implementación de las ias en la nube funcionan (soy pobre no las pago)
-
--Hay problemas con la implementación de el modelo VR
