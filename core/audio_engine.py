@@ -38,30 +38,44 @@ class AudioEngine:
             logger.error(f"❌ Error en transcripción: {e}")
             raise
 
-    def speak(self, text):
-        """Usa Piper TTS para generar voz instantánea"""
+    def speak(self, text, language='es'):
+        """Usa Piper TTS para generar archivo de voz"""
         if not text or not text.strip():
             logger.warning("⚠️  Intento de reproducir texto vacío")
-            return
+            return None
 
         if not os.path.exists(self.piper_path):
             logger.error(f"❌ Piper no encontrado en {self.piper_path}")
             print("❌ Error: Piper no encontrado. Ejecuta setup_linux.sh")
-            return
+            return None
 
         if not os.path.exists(self.voice_model):
             logger.warning(f"⚠️  Modelo de voz no encontrado: {self.voice_model}")
             print("⚠️  Modelo de voz no encontrado")
-            return
+            return None
 
-        # Comando Linux: texto -> piper -> aplay (reproductor de audio de Linux)
-        # Esto evita crear archivos temporales pesados y reproduce directo al hardware
+        # Crear archivo temporal para el audio
+        import tempfile
+        output_file = tempfile.NamedTemporaryFile(suffix='.wav', delete=False, dir='uploads').name
+        
         safe_text = text.replace('"', '\\"').replace('$', '\\$')
-        command = f'echo "{safe_text}" | {self.piper_path} --model {self.voice_model} --output_raw | aplay -r 22050 -f S16_LE -t raw 2>/dev/null'
+        command = f'echo "{safe_text}" | {self.piper_path} --model {self.voice_model} --output_file {output_file} 2>/dev/null'
         
         try:
-            logger.debug(f"Reproduciendo audio: {text[:50]}...")
-            subprocess.Popen(command, shell=True)
+            logger.debug(f"Generando audio: {text[:50]}...")
+            result = subprocess.run(command, shell=True, capture_output=True, timeout=30)
+            
+            if os.path.exists(output_file) and os.path.getsize(output_file) > 0:
+                logger.info(f"✅ Audio generado: {output_file}")
+                return output_file
+            else:
+                logger.error("❌ Piper no generó archivo de audio válido")
+                return None
+                
+        except subprocess.TimeoutExpired:
+            logger.error("❌ Timeout generando audio")
+            return None
         except Exception as e:
             logger.error(f"❌ Error en TTS: {e}")
             print(f"❌ Error en audio: {e}")
+            return None

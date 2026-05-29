@@ -76,12 +76,6 @@ class Brain:
         self.llm_settings = self.config['llm']
 
     def process(self, personality_config, user_input, history):
-        if _is_question_too_complex(user_input):
-            return {
-                "text": "Esa pregunta es muy compleja. ¿Puedes simplificarla?",
-                "emotion": "neutral"
-            }
-
         provider = self.llm_settings['provider']
         model = self.llm_settings['model']
         url = self.llm_settings['url']

@@ -2,215 +2,455 @@
 <html lang="es">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>VR Character - Lip Sync - AI-TRADE-AI</title>
+    <title>AI-TRADE-AI VR | Pro System</title>
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
         body { font-family: 'Courier New', monospace; background: #05080f; color: white; overflow: hidden; }
         #canvas-container { width: 100vw; height: 100vh; position: relative; }
-        #loading-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: #000; z-index: 999; display: flex; align-items: center; justify-content: center; transition: opacity 0.5s; }
-        #loading-overlay.hidden { opacity: 0; visibility: hidden; }
-        #hud { position: fixed; top: 12px; left: 12px; z-index: 100; width: 330px; padding: 14px; background: rgba(0, 0, 0, 0.9); border: 2px solid #00ffcc; border-radius: 12px; }
-        #hud h1 { margin: 0; font-size: 1.2rem; color: #00ffcc; }
-        #response-text { min-height: 50px; margin: 10px 0; padding: 10px; background: rgba(0, 255, 204, 0.05); border-left: 3px solid #00ffcc; font-size: 0.85rem; color: #a6f5e0; line-height: 1.4; }
-        .controls { display: flex; gap: 8px; margin-top: 10px; }
-        input { flex-grow: 1; padding: 10px; background: #000; border: 1px solid #00ffcc; color: #00ffcc; border-radius: 6px; outline: none; }
-        button { padding: 10px; background: #00ffcc; border: none; font-weight: bold; cursor: pointer; border-radius: 6px; color: #000; }
-        #vrm-status { font-size: 0.7rem; margin-top: 10px; color: #00ffcc; }
+        #hud {
+            position: fixed; top: 12px; left: 12px; z-index: 100;
+            width: 340px; padding: 15px;
+            background: rgba(0,0,0,0.9); border: 2px solid #00ffcc;
+            border-radius: 12px; max-height: 95vh; overflow-y: auto;
+        }
+        #char-name { color: #00ffcc; font-size: 1.2rem; margin-bottom: 10px; }
+        #response-text {
+            min-height: 50px; margin: 10px 0; padding: 10px;
+            background: rgba(255,255,255,0.05); border-left: 3px solid #00ffcc;
+            font-size: 0.85rem; color: #a6f5e0; line-height: 1.4;
+        }
+        #settings-panel {
+            position: fixed; top: 12px; right: 12px; z-index: 100;
+            width: 280px; background: rgba(0,0,0,0.9);
+            border: 1px solid #ff0055; border-radius: 12px;
+            padding: 10px; max-height: 85vh; overflow-y: auto;
+            transition: transform 0.3s;
+        }
+        #settings-panel.closed { transform: translateX(320px); }
+        #btn-toggle-settings {
+            position: fixed; top: 12px; right: 12px; z-index: 101;
+            background: #ff0055; color: white; border-radius: 50%;
+            width: 40px; height: 40px; border: none; cursor: pointer;
+            font-size: 1.2rem;
+        }
+        input, select, textarea {
+            width: 100%; padding: 8px; background: #000;
+            border: 1px solid #333; color: #00ffcc;
+            border-radius: 4px; outline: none; margin-bottom: 8px;
+            font-family: inherit;
+        }
+        button {
+            padding: 8px; background: #00ffcc; border: none;
+            font-weight: bold; cursor: pointer; border-radius: 4px;
+            color: #000; width: 100%; margin-bottom: 5px;
+        }
+        .btn-expr {
+            background: #222; color: #fff; width: 48%; margin: 1%;
+            font-size: 0.6rem; padding: 8px; border: 1px solid #444;
+        }
+        .btn-expr.active { background: #ff0055; border-color: #ff0055; }
+        .btn-record { background: #ff0055 !important; color: white !important; margin-top: 10px; }
+        .recording { background: #fff !important; color: #ff0055 !important; animation: blink 1s infinite; }
+        @keyframes blink { 50% { opacity: 0.5; } }
+        label { font-size: 0.7rem; color: #888; display: block; margin-bottom: 2px; }
+        #vrm-status { font-size: 0.65rem; color: #666; margin-top: 5px; min-height: 16px; }
+        #upload-progress {
+            display: none; margin-top: 5px;
+            background: #111; border-radius: 4px; overflow: hidden; height: 6px;
+        }
+        #upload-progress-bar {
+            height: 100%; width: 0%;
+            background: linear-gradient(90deg, #00ffcc, #88ff8f);
+            transition: width 0.1s;
+        }
     </style>
 </head>
 <body>
-    <div id="loading-overlay"><div><h2 style="color:#00ffcc">Iniciando Lip-Sync...</h2></div></div>
-    <div id="canvas-container"></div>
-    
-    <div id="hud">
-        <h1 id="char-name">Luna</h1>
-        <p id="char-personality" style="font-size:0.75rem; color:#888;">IA Interactiva</p>
-        <div id="response-text">Escribe algo para hablar...</div>
-        
-        <div class="controls">
-            <input type="text" id="user-input" placeholder="Di algo..." onkeypress="if(event.key==='Enter') sendChat()">
-            <button onclick="sendChat()">ENVIAR</button>
-        </div>
-        <div id="vrm-status">💡 Status: <span id="status-val">Cargando...</span></div>
+<div id="canvas-container"></div>
+<button id="btn-toggle-settings">⚙️</button>
+
+<div id="hud">
+    <h1 id="char-name">Gestor de Personajes</h1>
+    <label>ELEGIR PERFIL:</label>
+    <select id="profile-select" onchange="loadProfile(this.value)"></select>
+
+    <div style="background:rgba(255,255,255,0.05); padding:10px; border-radius:8px; margin-bottom:8px;">
+        <input type="hidden" id="prof-id">
+        <label>Nombre:</label>
+        <input type="text" id="prof-name" placeholder="Nombre del personaje">
+        <label>Personalidad:</label>
+        <textarea id="prof-personality" rows="3" placeholder="Describe la personalidad..."></textarea>
+        <label>Modelo VRM (max recomendado: 50MB):</label>
+        <input type="file" id="prof-vrm" accept=".vrm">
+        <div id="upload-progress"><div id="upload-progress-bar"></div></div>
+        <button onclick="saveProfile()" style="background:#00ffcc; margin-top:5px;">💾 GUARDAR</button>
+        <button onclick="clearForm()" style="background:#333; color:#fff;">+ NUEVO</button>
+        <button onclick="deleteProfile()" style="background:#ff0055; color:#fff;">🗑️ ELIMINAR</button>
     </div>
 
-    <script type="importmap">
-    {
-        "imports": {
-            "three": "https://unpkg.com/three@0.154.0/build/three.module.js",
-            "three/examples/jsm/loaders/GLTFLoader": "https://unpkg.com/three@0.154.0/examples/jsm/loaders/GLTFLoader.js",
-            "three/examples/jsm/controls/OrbitControls": "https://unpkg.com/three@0.154.0/examples/jsm/controls/OrbitControls.js",
-            "@pixiv/three-vrm": "https://unpkg.com/@pixiv/three-vrm@2.0.2/lib/three-vrm.module.js"
-        }
+    <div id="response-text">Selecciona un perfil.</div>
+
+    <div style="display:flex; gap:5px; margin-top:8px;">
+        <input type="text" id="user-input" placeholder="Escribe...">
+        <button id="send-btn" style="width:auto; padding:0 15px;">OK</button>
+    </div>
+    <button id="record-btn" class="btn-record">🎤 GRABAR VOZ</button>
+    <div id="vrm-status"></div>
+</div>
+
+<div id="settings-panel" class="closed">
+    <h2 style="font-size:0.8rem; color:#ff0055; margin-bottom:10px; text-align:center;">EXPRESIONES</h2>
+    <div id="expression-list" style="display:flex; flex-wrap:wrap;"></div>
+</div>
+
+<script type="importmap">
+{
+    "imports": {
+        "three": "https://unpkg.com/three@0.154.0/build/three.module.js",
+        "three/examples/jsm/loaders/GLTFLoader": "https://unpkg.com/three@0.154.0/examples/jsm/loaders/GLTFLoader.js",
+        "three/examples/jsm/controls/OrbitControls": "https://unpkg.com/three@0.154.0/examples/jsm/controls/OrbitControls.js",
+        "@pixiv/three-vrm": "https://unpkg.com/@pixiv/three-vrm@2.0.2/lib/three-vrm.module.js"
     }
-    </script>
+}
+</script>
 
-    <script type="module">
-        import * as THREE from 'three';
-        import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader';
-        import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls';
-        import { VRMLoaderPlugin } from '@pixiv/three-vrm';
+<script type="module">
+import * as THREE from 'three';
+import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader';
+import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls';
+import { VRMLoaderPlugin } from '@pixiv/three-vrm';
 
-        let scene, camera, renderer, currentVrm, clock, controls;
-        let isSpeaking = false; // Estado para controlar el movimiento de la boca
+const CHUNK_SIZE = 1 * 1024 * 1024; // 1MB por chunk
 
-        function init() {
-            scene = new THREE.Scene();
-            scene.background = new THREE.Color(0x05080f);
-            clock = new THREE.Clock();
+function fixUrl(url) {
+    if (!url) return url;
+    return url.replace(/https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?/, window.location.origin);
+}
 
-            camera = new THREE.PerspectiveCamera(35, window.innerWidth / window.innerHeight, 0.1, 100);
-            camera.position.set(0, 1.4, 2.5);
+function setVrmStatus(msg) {
+    document.getElementById('vrm-status').textContent = msg;
+}
 
-            renderer = new THREE.WebGLRenderer({ antialias: true });
-            renderer.setSize(window.innerWidth, window.innerHeight);
-            renderer.setPixelRatio(window.devicePixelRatio);
-            document.getElementById('canvas-container').appendChild(renderer.domElement);
+function setProgress(pct) {
+    const bar = document.getElementById('upload-progress');
+    const fill = document.getElementById('upload-progress-bar');
+    bar.style.display = pct >= 0 && pct < 100 ? 'block' : 'none';
+    fill.style.width = pct + '%';
+}
 
-            const light = new THREE.DirectionalLight(0xffffff, 1.5);
-            light.position.set(1, 1, 1).normalize();
-            scene.add(light);
-            scene.add(new THREE.AmbientLight(0x404040, 1.0));
+let scene, camera, renderer, currentVrm, clock, controls;
+let isSpeaking = false, profiles = [], activeProfile = null, blinkInterval = null;
 
-            controls = new OrbitControls(camera, renderer.domElement);
-            controls.target.set(0, 1.2, 0);
-            controls.update();
+function init() {
+    scene = new THREE.Scene();
+    scene.background = new THREE.Color(0x05080f);
+    clock = new THREE.Clock();
 
-            animate();
-            loadCharacter();
-        }
+    camera = new THREE.PerspectiveCamera(35, window.innerWidth / window.innerHeight, 0.1, 100);
+    camera.position.set(0, 1.4, 2.2);
 
-        async function loadCharacter() {
-            try {
-                const res = await fetch('/api/vr-character');
-                const data = await res.json();
-                document.getElementById('char-name').innerText = data.name;
-                if (data.vrm_url) loadVRM(data.vrm_url);
-            } catch (e) {
-                console.error(e);
-            }
-        }
+    renderer = new THREE.WebGLRenderer({ antialias: true });
+    renderer.setSize(window.innerWidth, window.innerHeight);
+    renderer.setPixelRatio(window.devicePixelRatio);
+    document.getElementById('canvas-container').appendChild(renderer.domElement);
 
-        function loadVRM(url) {
-            const loader = new GLTFLoader();
-            loader.register((parser) => new VRMLoaderPlugin(parser));
-            loader.load(url, (gltf) => {
-                const vrm = gltf.userData.vrm;
-                currentVrm = vrm;
-                scene.add(vrm.scene);
-                vrm.scene.rotation.y = Math.PI;
-                document.getElementById('status-val').innerText = "Conectado ✅";
-                document.getElementById('loading-overlay').classList.add('hidden');
-            });
-        }
+    scene.add(new THREE.DirectionalLight(0xffffff, 1.5));
+    scene.add(new THREE.AmbientLight(0x404040, 1.0));
 
-        // --- LÓGICA DE HABLA Y BOCA ---
-        function handleLipSync(time) {
-            if (!currentVrm || !currentVrm.expressionManager) return;
+    controls = new OrbitControls(camera, renderer.domElement);
+    controls.target.set(0, 1.2, 0);
+    controls.update();
 
-            if (isSpeaking) {
-                // Hacemos que la boca se abra y cierre de forma natural (Sinusoide rápida)
-                const mouthOpenValue = Math.abs(Math.sin(time * 15)) * 0.7; 
-                currentVrm.expressionManager.setValue('aa', mouthOpenValue);
-            } else {
-                // Si no está hablando, cerramos la boca gradualmente
-                const currentVal = currentVrm.expressionManager.getValue('aa');
-                if (currentVal > 0) {
-                    currentVrm.expressionManager.setValue('aa', Math.max(0, currentVal - 0.1));
-                }
-            }
-        }
+    window.addEventListener('resize', () => {
+        camera.aspect = window.innerWidth / window.innerHeight;
+        camera.updateProjectionMatrix();
+        renderer.setSize(window.innerWidth, window.innerHeight);
+    });
 
-        function applyForcedPose() {
-            if (!currentVrm) return;
-            const humanoid = currentVrm.humanoid;
-            const leftArm = humanoid.getRawBoneNode('leftUpperArm');
-            const rightArm = humanoid.getRawBoneNode('rightUpperArm');
-            if (leftArm && rightArm) {
-                leftArm.rotation.z = 1.3; 
-                rightArm.rotation.z = -1.3;
-            }
-        }
+    animate();
+    fetchProfiles();
+}
 
-        function animate() {
-            requestAnimationFrame(animate);
-            const delta = clock.getDelta();
-            const time = performance.now() * 0.001;
-
-            if (currentVrm) {
-                currentVrm.update(delta);
-                applyForcedPose();
-                handleLipSync(time); // Actualizar boca
-
-                // Parpadeo
-                if (Math.random() < 0.008 && !isSpeaking) {
-                    currentVrm.expressionManager.setValue('blink', 1.0);
-                    setTimeout(() => currentVrm.expressionManager.setValue('blink', 0), 150);
-                }
-            }
-
-            if (controls) controls.update();
-            renderer.render(scene, camera);
-        }
-
-        window.sendChat = async () => {
-            const input = document.getElementById('user-input');
-            const text = input.value.trim();
-            if (!text) return;
-
-            document.getElementById('response-text').innerText = "...";
-            input.value = "";
-
-            try {
-                const r = await fetch('/api/chat', {
-                    method: 'POST',
-                    headers: {'Content-Type': 'application/json'},
-                    body: JSON.stringify({text})
-                });
-                const d = await r.json();
-                document.getElementById('response-text').innerText = d.text;
-                
-                // --- INICIAR VOZ Y LIP-SYNC ---
-                speakResponse(d.text);
-
-            } catch (e) {
-                document.getElementById('response-text').innerText = "Error de conexión.";
-            }
-        };
-
-        function speakResponse(text) {
-            if (!window.speechSynthesis) return;
-
-            const utterance = new SpeechSynthesisUtterance(text);
-            utterance.lang = 'es-ES'; // Idioma
-
-            // Cuando empieza a hablar
-            utterance.onstart = () => {
-                isSpeaking = true;
-                if (currentVrm && currentVrm.expressionManager) {
-                    currentVrm.expressionManager.setValue('happy', 0.3); // Cara amable al hablar
-                }
-            };
-
-            // Cuando termina de hablar
-            utterance.onend = () => {
-                isSpeaking = false;
-                if (currentVrm && currentVrm.expressionManager) {
-                    currentVrm.expressionManager.setValue('happy', 0);
-                }
-            };
-
-            window.speechSynthesis.speak(utterance);
-        }
-
-        window.addEventListener('resize', () => {
-            camera.aspect = window.innerWidth / window.innerHeight;
-            camera.updateProjectionMatrix();
-            renderer.setSize(window.innerWidth, window.innerHeight);
+async function fetchProfiles() {
+    try {
+        const res = await fetch('/api/profiles');
+        if (!res.ok) throw new Error('HTTP ' + res.status);
+        profiles = await res.json();
+        const s = document.getElementById('profile-select');
+        s.innerHTML = '<option value="">-- Seleccionar perfil --</option>';
+        profiles.forEach(p => {
+            const opt = document.createElement('option');
+            opt.value = p.id;
+            opt.innerText = p.name;
+            s.appendChild(opt);
         });
 
-        init();
-    </script>
+        const dInit = await fetch('/api/vr-character').then(r => r.json());
+        if (dInit.vrm_url) loadVRM(dInit.vrm_url);
+    } catch (err) {
+        console.error('Error fetchProfiles:', err);
+        setVrmStatus('⚠️ Error cargando perfiles: ' + err.message);
+    }
+}
+
+window.loadProfile = (id) => {
+    if (!id) return;
+    activeProfile = profiles.find(p => p.id === id);
+    if (activeProfile) {
+        document.getElementById('prof-id').value = activeProfile.id;
+        document.getElementById('prof-name').value = activeProfile.name;
+        document.getElementById('prof-personality').value = activeProfile.personality;
+        document.getElementById('char-name').innerText = activeProfile.name;
+        if (activeProfile.vrm_url) loadVRM(activeProfile.vrm_url);
+    }
+};
+
+async function uploadVRMChunked(file) {
+    const totalChunks = Math.ceil(file.size / CHUNK_SIZE);
+    const filename = file.name.replace(' ', '_');
+
+    setVrmStatus(`Subiendo chunk 0/${totalChunks}...`);
+    setProgress(0);
+
+    for (let i = 0; i < totalChunks; i++) {
+        const start = i * CHUNK_SIZE;
+        const end = Math.min(start + CHUNK_SIZE, file.size);
+        const chunk = file.slice(start, end);
+
+        const base64 = await new Promise((resolve, reject) => {
+            const reader = new FileReader();
+            reader.onload = () => resolve(reader.result.split(',')[1]);
+            reader.onerror = reject;
+            reader.readAsDataURL(chunk);
+        });
+
+        const res = await fetch('/api/upload-vrm-chunk', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ filename, chunkIndex: i, totalChunks, data: base64 })
+        });
+
+        if (!res.ok) throw new Error(`Error en chunk ${i}: HTTP ${res.status}`);
+
+        const d = await res.json();
+        const pct = Math.round((i + 1) / totalChunks * 100);
+        setVrmStatus(`Subiendo ${i + 1}/${totalChunks} (${pct}%)...`);
+        setProgress(pct);
+
+        if (d.status === 'ok') {
+            setProgress(100);
+            return d.vrm_url;
+        }
+    }
+    throw new Error('Upload incompleto');
+}
+
+window.saveProfile = async () => {
+    const id = document.getElementById('prof-id').value || Date.now().toString();
+    const file = document.getElementById('prof-vrm').files[0];
+    let url = activeProfile?.vrm_url || '';
+
+    if (file) {
+        try {
+            url = await uploadVRMChunked(file);
+            url = fixUrl(url);
+            setVrmStatus('✅ VRM subido: ' + file.name);
+            setProgress(100);
+        } catch (err) {
+            alert('Error subiendo VRM: ' + err.message);
+            setVrmStatus('❌ Error: ' + err.message);
+            setProgress(-1);
+            return;
+        }
+    }
+
+    const name = document.getElementById('prof-name').value.trim();
+    const personality = document.getElementById('prof-personality').value.trim();
+
+    if (!name) { alert('El nombre es obligatorio'); return; }
+
+    await fetch('/api/profiles', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id, name, personality, vrm_url: url, pitch: 1.4, rate: 1.0 })
+    });
+
+    alert('Perfil guardado');
+    fetchProfiles();
+};
+
+window.deleteProfile = async () => {
+    const id = document.getElementById('prof-id').value;
+    if (!id || !confirm('¿Borrar personaje?')) return;
+    await fetch(`/api/profiles/${id}`, { method: 'DELETE' });
+    clearForm();
+    fetchProfiles();
+    alert('Eliminado');
+};
+
+window.clearForm = () => {
+    document.getElementById('prof-id').value = '';
+    document.getElementById('prof-name').value = '';
+    document.getElementById('prof-personality').value = '';
+    document.getElementById('prof-vrm').value = '';
+    activeProfile = null;
+};
+
+function loadVRM(url) {
+    url = fixUrl(url);
+    if (!url || url.endsWith('/')) return;
+
+    setVrmStatus('Cargando VRM...');
+    console.log('Cargando VRM:', url);
+
+    const loader = new GLTFLoader();
+    loader.register(parser => new VRMLoaderPlugin(parser));
+
+    loader.load(
+        url,
+        (gltf) => {
+            if (currentVrm) { scene.remove(currentVrm.scene); currentVrm = null; }
+
+            const vrm = gltf.userData.vrm;
+            if (!vrm) {
+                setVrmStatus('❌ gltf.userData.vrm vacío — archivo no es VRM válido');
+                console.error('VRM no encontrado en userData');
+                return;
+            }
+
+            currentVrm = vrm;
+            scene.add(currentVrm.scene);
+            currentVrm.scene.rotation.y = Math.PI;
+            setVrmStatus('✅ ' + url.split('/').pop());
+
+            populateExpressions();
+
+            if (blinkInterval) clearInterval(blinkInterval);
+            blinkInterval = setInterval(() => {
+                if (currentVrm?.expressionManager) {
+                    currentVrm.expressionManager.setValue('blink', 1);
+                    setTimeout(() => currentVrm.expressionManager.setValue('blink', 0), 150);
+                }
+            }, 3500);
+        },
+        (progress) => {
+            if (progress.total > 0) {
+                const pct = Math.round(progress.loaded / progress.total * 100);
+                setVrmStatus(`Cargando... ${pct}%`);
+            }
+        },
+        (err) => {
+            console.error('Error cargando VRM:', err);
+            setVrmStatus('❌ Error cargando: ' + (err.message || err));
+        }
+    );
+}
+
+function populateExpressions() {
+    const container = document.getElementById('expression-list');
+    container.innerHTML = '';
+    if (!currentVrm?.expressionManager) return;
+    currentVrm.expressionManager.expressions.forEach(expr => {
+        const name = expr.expressionName.toLowerCase();
+        if (['aa','ih','ou','ee','oh','blink','neutral'].includes(name)) return;
+        const btn = document.createElement('button');
+        btn.innerText = expr.expressionName.toUpperCase();
+        btn.className = 'btn-expr';
+        btn.onclick = () => {
+            const val = currentVrm.expressionManager.getValue(expr.expressionName) > 0.5 ? 0 : 1;
+            currentVrm.expressionManager.setValue(expr.expressionName, val);
+            btn.classList.toggle('active', val === 1);
+        };
+        container.appendChild(btn);
+    });
+}
+
+function animate() {
+    requestAnimationFrame(animate);
+    const delta = clock.getDelta();
+    if (currentVrm) {
+        currentVrm.update(delta);
+        const la = currentVrm.humanoid.getRawBoneNode('leftUpperArm');
+        const ra = currentVrm.humanoid.getRawBoneNode('rightUpperArm');
+        if (la) la.rotation.z = 1.3;
+        if (ra) ra.rotation.z = -1.3;
+        if (currentVrm.expressionManager) {
+            if (window.speechSynthesis.speaking || isSpeaking) {
+                currentVrm.expressionManager.setValue('aa', Math.abs(Math.sin(performance.now() * 0.012)) * 0.7);
+            } else {
+                currentVrm.expressionManager.setValue('aa', 0);
+            }
+        }
+    }
+    controls.update();
+    renderer.render(scene, camera);
+}
+
+async function sendChat() {
+    const input = document.getElementById('user-input');
+    const text = input.value.trim();
+    if (!text) { setVrmStatus('⚠️ Escribe algo primero'); return; }
+    if (!activeProfile) { document.getElementById('response-text').innerText = 'Selecciona un perfil primero.'; return; }
+
+    document.getElementById('response-text').innerText = 'Pensando...';
+    input.value = '';
+
+    try {
+        const r = await fetch('/api/chat', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ text, name: activeProfile.name, personality: activeProfile.personality })
+        });
+        const d = await r.json();
+        document.getElementById('response-text').innerText = d.text;
+        window.speechSynthesis.cancel();
+        const msg = new SpeechSynthesisUtterance(d.text);
+        msg.lang = 'es-ES';
+        msg.pitch = activeProfile.pitch || 1.4;
+        msg.rate = activeProfile.rate || 1.0;
+        msg.onstart = () => isSpeaking = true;
+        msg.onend = () => isSpeaking = false;
+        window.speechSynthesis.speak(msg);
+    } catch (err) {
+        document.getElementById('response-text').innerText = '❌ Error: ' + err.message;
+    }
+}
+
+let mediaRecorder, chunks = [];
+window.toggleRec = async () => {
+    const btn = document.getElementById('record-btn');
+    if (mediaRecorder?.state === 'recording') {
+        mediaRecorder.stop();
+        btn.classList.remove('recording');
+        btn.innerText = '🎤 GRABAR VOZ';
+        return;
+    }
+    try {
+        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        mediaRecorder = new MediaRecorder(stream);
+        chunks = [];
+        mediaRecorder.ondataavailable = e => chunks.push(e.data);
+        mediaRecorder.onstop = async () => {
+            const fd = new FormData();
+            fd.append('audio', new Blob(chunks), 'in.webm');
+            const d = await (await fetch('/api/transcribe', { method: 'POST', body: fd })).json();
+            if (d.transcript) { document.getElementById('user-input').value = d.transcript; sendChat(); }
+            stream.getTracks().forEach(t => t.stop());
+        };
+        mediaRecorder.start();
+        btn.classList.add('recording');
+        btn.innerText = '⏹️ PARAR';
+    } catch (err) {
+        alert('Micrófono no disponible: ' + err.message);
+    }
+};
+
+document.getElementById('send-btn').onclick = sendChat;
+document.getElementById('record-btn').onclick = window.toggleRec;
+document.getElementById('btn-toggle-settings').onclick = () => document.getElementById('settings-panel').classList.toggle('closed');
+document.getElementById('user-input').addEventListener('keydown', e => { if (e.key === 'Enter') sendChat(); });
+
+init();
+</script>
 </body>
 </html>
