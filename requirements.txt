@@ -5,3 +5,5 @@ flask==3.0.3
 pyyaml==6.0.1
 pydantic==2.7.1
 python-dotenv==1.0.0
+prompt-toolkit==3.0.36
+piper-tts==1.2.0

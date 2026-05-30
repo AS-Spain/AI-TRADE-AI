@@ -26,6 +26,7 @@ except Exception as _err:
     print('⚠️ AudioEngine no disponible:', _err)
     class AudioEngine:
         def transcribe(self, *a, **k): return "STT no disponible"
+        def speak(self, *a, **k): return None
     audio_engine = AudioEngine()
 
 from core.loader import load_character, list_characters
@@ -100,24 +101,19 @@ def delete_profile(profile_id):
 def vr_character():
     config = load_config()
     character = get_active_character()
-
     vrm_url = ''
     active_vrm = config.get('active_vrm', '')
-
     if active_vrm and active_vrm not in ['/uploads', '/uploads/']:
         clean = active_vrm.lstrip('/')
         if os.path.exists(clean):
             vrm_url = active_vrm
-
     if not vrm_url and character and hasattr(character, 'vrm') and character.vrm:
         vrm_filename = os.path.basename(character.vrm)
         vrm_path = os.path.join('characters', character.name, vrm_filename)
         if os.path.exists(vrm_path):
             vrm_url = f"/characters/{character.name}/{vrm_filename}"
-
     if vrm_url and not vrm_url.startswith('http'):
         vrm_url = request.host_url.rstrip('/') + '/' + vrm_url.lstrip('/')
-
     return jsonify({
         'name': character.name if character else 'Sin personaje',
         'personality': character.personality if character else '',
@@ -129,29 +125,21 @@ def upload_vrm_chunk():
     data = request.json
     if not data:
         return jsonify({'status': 'error', 'message': 'Sin datos'}), 400
-
     filename = data.get('filename', '').replace(' ', '_')
     chunk_index = data.get('chunkIndex', 0)
     total_chunks = data.get('totalChunks', 1)
     chunk_b64 = data.get('data', '')
-
     if not filename or not chunk_b64:
         return jsonify({'status': 'error', 'message': 'Faltan campos'}), 400
-
     try:
         chunk_bytes = base64.b64decode(chunk_b64)
     except Exception as e:
         return jsonify({'status': 'error', 'message': f'Error base64: {e}'}), 400
-
     tmp_dir = os.path.join('uploads', '_chunks', filename)
     os.makedirs(tmp_dir, exist_ok=True)
-
     chunk_path = os.path.join(tmp_dir, str(chunk_index))
     with open(chunk_path, 'wb') as f:
         f.write(chunk_bytes)
-
-    app.logger.info(f"Chunk {chunk_index+1}/{total_chunks} de {filename} guardado")
-
     if chunk_index == total_chunks - 1:
         final_path = os.path.join('uploads', filename)
         try:
@@ -161,13 +149,9 @@ def upload_vrm_chunk():
                     with open(cp, 'rb') as cf:
                         out.write(cf.read())
             shutil.rmtree(tmp_dir, ignore_errors=True)
-            size = os.path.getsize(final_path)
-            app.logger.info(f"VRM reconstruido: {final_path} ({size} bytes)")
-            # NO tocar active_vrm global
             return jsonify({'status': 'ok', 'vrm_url': f"/uploads/{filename}", 'filename': filename})
         except Exception as e:
             return jsonify({'status': 'error', 'message': f'Error reconstruyendo: {e}'}), 500
-
     return jsonify({'status': 'chunk_ok', 'chunkIndex': chunk_index})
 
 @app.route('/api/upload-vrm', methods=['POST'])
@@ -180,9 +164,6 @@ def upload_vrm():
     filename = file.filename.replace(' ', '_')
     save_path = os.path.join('uploads', filename)
     file.save(save_path)
-    size = os.path.getsize(save_path)
-    app.logger.info(f"VRM guardado: {save_path} ({size} bytes)")
-    # NO tocar active_vrm global
     return jsonify({'status': 'ok', 'vrm_url': f"/uploads/{filename}", 'filename': filename})
 
 @app.route('/api/chat', methods=['POST'])
@@ -191,14 +172,11 @@ def chat_api():
     data = request.json
     if not data:
         return jsonify({'status': 'error', 'message': 'Sin datos'}), 400
-
     char_name = data.get('name') or config.get('active_personality', 'IA')
     personality = data.get('personality') or 'Eres una IA amable.'
     text = data.get('text', '')
-
     if not text:
         return jsonify({'text': 'No recibí texto.', 'name': char_name, 'emotion': 'neutral'})
-
     contexto = memory.get_context(char_name)
     try:
         memory.save_message(char_name, 'user', text)
@@ -229,6 +207,25 @@ def transcribe_audio():
             os.remove(temp_path)
         except OSError:
             pass
+
+@app.route('/api/tts', methods=['POST'])
+def tts():
+    data = request.json
+    if not data or not data.get('text'):
+        return jsonify({'status': 'error', 'message': 'Sin texto'}), 400
+    text = data['text']
+    voice_key = data.get('voice', 'mujer')
+    try:
+        audio_path = audio_engine.speak(text, voice_key=voice_key)
+        if not audio_path:
+            return jsonify({'status': 'error', 'message': 'TTS falló'}), 500
+        filename = os.path.basename(audio_path)
+        audio_url = request.host_url.rstrip('/') + f'/uploads/{filename}'
+        return jsonify({'status': 'ok', 'audio_url': audio_url})
+    except Exception as e:
+        import traceback
+        print(f'❌ TTS ERROR:\n{traceback.format_exc()}')
+        return jsonify({'status': 'error', 'message': str(e)}), 500
 
 @app.route('/api/config', methods=['POST'])
 def update_config():
@@ -327,4 +324,4 @@ def home():
     return render_template_string(HTML, c=config)
 
 if __name__ == '__main__':
-    app.run(host='0.0.0.0', port=5000, debug=True)
+    app.run(host='0.0.0.0', port=5000, debug=False, use_reloader=False)

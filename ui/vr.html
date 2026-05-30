@@ -74,6 +74,14 @@
     <label>ELEGIR PERFIL:</label>
     <select id="profile-select" onchange="loadProfile(this.value)"></select>
 
+<label>VOZ:</label>
+<select id="voice-select">
+    <option value="mujer">👩 Mujer</option>
+    <option value="hombre">👨 Hombre</option>
+    <option value="nina">👧 Niña</option>
+    <option value="nino">👦 Niño</option>
+</select>
+
     <div style="background:rgba(255,255,255,0.05); padding:10px; border-radius:8px; margin-bottom:8px;">
         <input type="hidden" id="prof-id">
         <label>Nombre:</label>
@@ -396,6 +404,7 @@ async function sendChat() {
     input.value = '';
 
     try {
+        // 1 — obtener respuesta del LLM
         const r = await fetch('/api/chat', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -403,14 +412,42 @@ async function sendChat() {
         });
         const d = await r.json();
         document.getElementById('response-text').innerText = d.text;
-        window.speechSynthesis.cancel();
-        const msg = new SpeechSynthesisUtterance(d.text);
-        msg.lang = 'es-ES';
-        msg.pitch = activeProfile.pitch || 1.4;
-        msg.rate = activeProfile.rate || 1.0;
-        msg.onstart = () => isSpeaking = true;
-        msg.onend = () => isSpeaking = false;
-        window.speechSynthesis.speak(msg);
+
+        // 2 — TTS con Piper
+        const voiceKey = document.getElementById('voice-select')?.value || 'mujer';
+        const ttsRes = await fetch('/api/tts', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ text: d.text, voice: voiceKey })
+        });
+        const ttsData = await ttsRes.json();
+
+        if (ttsData.status === 'ok' && ttsData.audio_url) {
+            // Reproducir audio Piper
+            const audio = new Audio(fixUrl(ttsData.audio_url));
+            isSpeaking = true;
+            audio.onended = () => { isSpeaking = false; };
+            audio.onerror = () => {
+                // Fallback a SpeechSynthesis si Piper falla
+                isSpeaking = false;
+                const msg = new SpeechSynthesisUtterance(d.text);
+                msg.lang = 'es-ES';
+                msg.onstart = () => isSpeaking = true;
+                msg.onend = () => isSpeaking = false;
+                window.speechSynthesis.speak(msg);
+            };
+            audio.play();
+        } else {
+            // Fallback a SpeechSynthesis
+            window.speechSynthesis.cancel();
+            const msg = new SpeechSynthesisUtterance(d.text);
+            msg.lang = 'es-ES';
+            msg.pitch = activeProfile.pitch || 1.4;
+            msg.onstart = () => isSpeaking = true;
+            msg.onend = () => isSpeaking = false;
+            window.speechSynthesis.speak(msg);
+        }
+
     } catch (err) {
         document.getElementById('response-text').innerText = '❌ Error: ' + err.message;
     }

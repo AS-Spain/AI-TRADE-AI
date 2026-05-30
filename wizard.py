@@ -4,7 +4,6 @@ import requests
 import shutil
 import subprocess
 from core.config_manager import load_config, save_config
-
 RECOMMENDED_OLLAMA_MODELS = [
     "llama3",
     "mistral",
